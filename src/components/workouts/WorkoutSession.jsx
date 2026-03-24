@@ -210,11 +210,11 @@ export default function WorkoutSession({ template, onFinish }) {
                     {lastSet && (
                       <div className="flex items-center gap-3 px-2">
                         <span className="text-gray-600 text-xs">
-                          Dernière fois : {lastSet.weight}kg × {lastSet.reps} reps
+                          Dernière fois : {lastSet.reps} reps × {lastSet.weight}kg
                         </span>
                         {suggestion && (
                           <span className="text-indigo-400 text-xs">
-                            → {suggestion.weight}kg × {suggestion.reps} reps ({suggestion.reason})
+                            → {suggestion.reps} reps × {suggestion.weight}kg ({suggestion.reason})
                           </span>
                         )}
                       </div>
