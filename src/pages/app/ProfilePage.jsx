@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { User, Mail, Ruler, Target, LogOut, Pencil, Check } from 'lucide-react'
+import Medals from '../../components/profile/Medals'
 
 export default function ProfilePage() {
   const [user, setUser] = useState(null)
@@ -182,6 +183,7 @@ export default function ProfilePage() {
         )}
       </div>
 
+      <Medals />
       {/* Déconnexion */}
       <button
         onClick={handleLogout}
