@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Plus, Trash2, Flame, Target, TrendingDown, TrendingUp, Dumbbell, X } from 'lucide-react'
+import { Plus, Trash2, Flame, Target, X } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import FoodSearch from '../../components/nutrition/FoodSearch'
 
 const CATEGORIES = ['petit-déj', 'déjeuner', 'dîner', 'snack']
 const ACTIVITY_LEVELS = {
@@ -22,18 +23,16 @@ function formatDate(dateStr) {
 }
 
 function calculateTDEE(profile) {
-  if (!profile?.weight_goal_kg || !profile?.height_cm || !profile?.age || !profile?.gender) return null
-  const { height_cm, age, gender, activity_level } = profile
-
-  // On utilise le poids actuel si dispo, sinon l'objectif
+  if (!profile?.height_cm || !profile?.age || !profile?.gender) return null
   const weight = profile.current_weight || profile.weight_goal_kg
+  if (!weight) return null
   let bmr
-  if (gender === 'homme') {
-    bmr = 88.362 + (13.397 * weight) + (4.799 * height_cm) - (5.677 * age)
+  if (profile.gender === 'homme') {
+    bmr = 88.362 + (13.397 * weight) + (4.799 * profile.height_cm) - (5.677 * profile.age)
   } else {
-    bmr = 447.593 + (9.247 * weight) + (3.098 * height_cm) - (4.330 * age)
+    bmr = 447.593 + (9.247 * weight) + (3.098 * profile.height_cm) - (4.330 * profile.age)
   }
-  const multiplier = ACTIVITY_LEVELS[activity_level]?.multiplier || 1.55
+  const multiplier = ACTIVITY_LEVELS[profile.activity_level]?.multiplier || 1.55
   return Math.round(bmr * multiplier)
 }
 
@@ -46,15 +45,15 @@ export default function NutritionPage() {
   const [showMealForm, setShowMealForm] = useState(false)
   const [showActivityForm, setShowActivityForm] = useState(false)
   const [showProfileForm, setShowProfileForm] = useState(false)
+  const [mealCat, setMealCat] = useState('déjeuner')
   const [loading, setLoading] = useState(true)
 
-  // Form states
-  const [mealName, setMealName] = useState('')
-  const [mealCals, setMealCals] = useState('')
-  const [mealCat, setMealCat] = useState('déjeuner')
+  // Activity form
   const [actName, setActName] = useState('')
   const [actCals, setActCals] = useState('')
   const [actDuration, setActDuration] = useState('')
+
+  // Profile form
   const [profAge, setProfAge] = useState('')
   const [profGender, setProfGender] = useState('homme')
   const [profActivity, setProfActivity] = useState('modere')
@@ -96,16 +95,10 @@ export default function NutritionPage() {
     }
 
     const { data: weekMeals } = await supabase
-      .from('meal_entries')
-      .select('date, calories')
-      .eq('user_id', user.id)
-      .in('date', dates)
+      .from('meal_entries').select('date, calories').eq('user_id', user.id).in('date', dates)
 
     const { data: weekActs } = await supabase
-      .from('activity_entries')
-      .select('date, calories_burned')
-      .eq('user_id', user.id)
-      .in('date', dates)
+      .from('activity_entries').select('date, calories_burned').eq('user_id', user.id).in('date', dates)
 
     const mapped = dates.map(date => {
       const ingested = (weekMeals || []).filter(m => m.date === date).reduce((s, m) => s + m.calories, 0)
@@ -119,16 +112,20 @@ export default function NutritionPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  const handleAddMeal = async () => {
+  const handleAddMeal = async (foodData) => {
     const { data: { user } } = await supabase.auth.getUser()
     await supabase.from('meal_entries').insert({
       user_id: user.id,
       date: getToday(),
-      name: mealName.trim(),
-      calories: parseInt(mealCals),
-      category: mealCat,
+      name: foodData.name,
+      calories: foodData.calories,
+      proteins: foodData.proteins || 0,
+      carbs: foodData.carbs || 0,
+      fats: foodData.fats || 0,
+      quantity_g: foodData.quantity_g || 100,
+      food_id: foodData.food_id || null,
+      category: foodData.category,
     })
-    setMealName(''); setMealCals(''); setMealCat('déjeuner')
     setShowMealForm(false)
     fetchData()
   }
@@ -189,14 +186,13 @@ export default function NutritionPage() {
   )
 
   const totalIngested = meals.reduce((s, m) => s + m.calories, 0)
+  const totalProteins = meals.reduce((s, m) => s + (m.proteins || 0), 0)
+  const totalCarbs = meals.reduce((s, m) => s + (m.carbs || 0), 0)
+  const totalFats = meals.reduce((s, m) => s + (m.fats || 0), 0)
   const totalBurned = activities.reduce((s, a) => s + a.calories_burned, 0)
-  const stepsCalories = weekData.find(d => d.isToday) ? 0 : 0
   const netCalories = totalIngested - totalBurned
 
-  const tdee = calculateTDEE({
-    ...profile,
-    current_weight: currentWeight,
-  })
+  const tdee = calculateTDEE({ ...profile, current_weight: currentWeight })
   const calorieGoal = profile?.calorie_goal || tdee
 
   const byCategory = CATEGORIES.map(cat => ({
@@ -247,18 +243,31 @@ export default function NutritionPage() {
                 style={{ width: `${Math.min((netCalories / calorieGoal) * 100, 100)}%` }}
               />
             </div>
-            <p className="text-gray-500 text-xs">
+            <p className="text-gray-500 text-xs mb-3">
               Objectif : {calorieGoal} kcal/jour
               {tdee && !profile?.calorie_goal && ' (calculé automatiquement)'}
             </p>
           </>
         )}
 
+        {/* Macros */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-gray-800 rounded-xl p-2 text-center">
+            <p className="text-blue-400 font-bold text-sm">{Math.round(totalProteins)}g</p>
+            <p className="text-gray-500 text-xs">Protéines</p>
+          </div>
+          <div className="bg-gray-800 rounded-xl p-2 text-center">
+            <p className="text-yellow-400 font-bold text-sm">{Math.round(totalCarbs)}g</p>
+            <p className="text-gray-500 text-xs">Glucides</p>
+          </div>
+          <div className="bg-gray-800 rounded-xl p-2 text-center">
+            <p className="text-red-400 font-bold text-sm">{Math.round(totalFats)}g</p>
+            <p className="text-gray-500 text-xs">Lipides</p>
+          </div>
+        </div>
+
         {!calorieGoal && (
-          <button
-            onClick={() => setShowProfileForm(true)}
-            className="text-indigo-400 text-sm"
-          >
+          <button onClick={() => setShowProfileForm(true)} className="text-indigo-400 text-sm mt-3">
             → Configurer mon objectif calorique
           </button>
         )}
@@ -268,12 +277,24 @@ export default function NutritionPage() {
       <div className="bg-gray-900 rounded-2xl p-5 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="text-white font-semibold">Repas</h2>
-          <button
-            onClick={() => setShowMealForm(true)}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white p-1.5 rounded-lg transition-colors"
-          >
-            <Plus size={18} />
-          </button>
+          <div className="flex gap-2">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat}
+                onClick={() => { setMealCat(cat); setShowMealForm(true) }}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white p-1.5 rounded-lg transition-colors"
+                title={cat}
+              >
+                <Plus size={18} />
+              </button>
+            )).slice(0, 1)}
+            <button
+              onClick={() => setShowMealForm(true)}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white p-1.5 rounded-lg transition-colors"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
         </div>
 
         {byCategory.map(({ cat, total, items }) => (
@@ -285,14 +306,23 @@ export default function NutritionPage() {
             {items.length > 0 ? (
               <div className="flex flex-col gap-2">
                 {items.map(meal => (
-                  <div key={meal.id} className="flex items-center justify-between bg-gray-800 rounded-xl px-3 py-2">
-                    <span className="text-white text-sm">{meal.name}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-orange-400 text-sm font-medium">{meal.calories} kcal</span>
-                      <button onClick={() => handleDeleteMeal(meal.id)} className="text-gray-500 hover:text-red-400 transition-colors">
-                        <Trash2 size={14} />
-                      </button>
+                  <div key={meal.id} className="flex flex-col bg-gray-800 rounded-xl px-3 py-2 gap-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-white text-sm">{meal.name}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-orange-400 text-sm font-medium">{meal.calories} kcal</span>
+                        <button onClick={() => handleDeleteMeal(meal.id)} className="text-gray-500 hover:text-red-400 transition-colors">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
+                    {(meal.proteins > 0 || meal.carbs > 0 || meal.fats > 0) && (
+                      <div className="flex gap-3">
+                        <span className="text-blue-400 text-xs">{meal.proteins}g prot</span>
+                        <span className="text-yellow-400 text-xs">{meal.carbs}g gluc</span>
+                        <span className="text-red-400 text-xs">{meal.fats}g lip</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -347,10 +377,7 @@ export default function NutritionPage() {
             <YAxis hide />
             <Tooltip
               contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '12px' }}
-              formatter={(value, name) => [
-                `${value} kcal`,
-                name === 'ingested' ? 'Ingérées' : 'Dépensées'
-              ]}
+              formatter={(value, name) => [`${value} kcal`, name === 'ingested' ? 'Ingérées' : 'Dépensées']}
             />
             <Bar dataKey="ingested" radius={[6, 6, 0, 0]}>
               {weekData.map((entry, i) => (
@@ -361,51 +388,13 @@ export default function NutritionPage() {
         </ResponsiveContainer>
       </div>
 
-      {/* Modal repas */}
+      {/* Modal FoodSearch */}
       {showMealForm && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-end">
-          <div className="bg-gray-900 w-full rounded-t-3xl p-6 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-white font-semibold">Ajouter un repas</h2>
-              <button onClick={() => setShowMealForm(false)}><X size={22} className="text-gray-400" /></button>
-            </div>
-            <input
-              type="text"
-              placeholder="Nom (ex: Poulet riz)"
-              value={mealName}
-              onChange={e => setMealName(e.target.value)}
-              className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
-              autoFocus
-            />
-            <input
-              type="number"
-              placeholder="Calories (kcal)"
-              value={mealCals}
-              onChange={e => setMealCals(e.target.value)}
-              className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <div className="flex gap-2 flex-wrap">
-              {CATEGORIES.map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setMealCat(cat)}
-                  className={`px-3 py-2 rounded-xl text-sm transition-colors capitalize ${
-                    mealCat === cat ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={handleAddMeal}
-              disabled={!mealName || !mealCals}
-              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
-            >
-              Ajouter
-            </button>
-          </div>
-        </div>
+        <FoodSearch
+          category={mealCat}
+          onAdd={handleAddMeal}
+          onClose={() => setShowMealForm(false)}
+        />
       )}
 
       {/* Modal activité */}
@@ -416,33 +405,17 @@ export default function NutritionPage() {
               <h2 className="text-white font-semibold">Ajouter une activité</h2>
               <button onClick={() => setShowActivityForm(false)}><X size={22} className="text-gray-400" /></button>
             </div>
-            <input
-              type="text"
-              placeholder="Activité (ex: Course à pied)"
-              value={actName}
+            <input type="text" placeholder="Activité (ex: Course à pied)" value={actName}
               onChange={e => setActName(e.target.value)}
-              className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
-              autoFocus
-            />
-            <input
-              type="number"
-              placeholder="Calories brûlées (kcal)"
-              value={actCals}
+              className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
+            <input type="number" placeholder="Calories brûlées (kcal)" value={actCals}
               onChange={e => setActCals(e.target.value)}
-              className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <input
-              type="number"
-              placeholder="Durée (minutes, optionnel)"
-              value={actDuration}
+              className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" />
+            <input type="number" placeholder="Durée (minutes, optionnel)" value={actDuration}
               onChange={e => setActDuration(e.target.value)}
-              className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <button
-              onClick={handleAddActivity}
-              disabled={!actName || !actCals}
-              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
-            >
+              className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" />
+            <button onClick={handleAddActivity} disabled={!actName || !actCals}
+              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors">
               Ajouter
             </button>
           </div>
@@ -457,65 +430,39 @@ export default function NutritionPage() {
               <h2 className="text-white font-semibold">Objectif calorique</h2>
               <button onClick={() => setShowProfileForm(false)}><X size={22} className="text-gray-400" /></button>
             </div>
-
             <p className="text-gray-400 text-sm">Renseigne ces infos pour calculer automatiquement ton besoin calorique journalier.</p>
-
             <div>
               <label className="text-gray-400 text-xs mb-1 block">Âge</label>
-              <input
-                type="number"
-                value={profAge}
-                onChange={e => setProfAge(e.target.value)}
-                placeholder="ex: 25"
-                className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full"
-              />
+              <input type="number" value={profAge} onChange={e => setProfAge(e.target.value)} placeholder="ex: 25"
+                className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full" />
             </div>
-
             <div>
               <label className="text-gray-400 text-xs mb-1 block">Sexe</label>
               <div className="flex gap-2">
                 {['homme', 'femme'].map(g => (
-                  <button
-                    key={g}
-                    onClick={() => setProfGender(g)}
-                    className={`flex-1 py-3 rounded-xl text-sm capitalize transition-colors ${
-                      profGender === g ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'
-                    }`}
-                  >
+                  <button key={g} onClick={() => setProfGender(g)}
+                    className={`flex-1 py-3 rounded-xl text-sm capitalize transition-colors ${profGender === g ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}>
                     {g}
                   </button>
                 ))}
               </div>
             </div>
-
             <div>
               <label className="text-gray-400 text-xs mb-1 block">Niveau d'activité</label>
               <div className="flex flex-col gap-2">
                 {Object.entries(ACTIVITY_LEVELS).map(([key, { label }]) => (
-                  <button
-                    key={key}
-                    onClick={() => setProfActivity(key)}
-                    className={`py-3 px-4 rounded-xl text-sm text-left transition-colors ${
-                      profActivity === key ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'
-                    }`}
-                  >
+                  <button key={key} onClick={() => setProfActivity(key)}
+                    className={`py-3 px-4 rounded-xl text-sm text-left transition-colors ${profActivity === key ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}>
                     {label}
                   </button>
                 ))}
               </div>
             </div>
-
             <div>
-              <label className="text-gray-400 text-xs mb-1 block">Objectif manuel (optionnel — remplace le calcul auto)</label>
-              <input
-                type="number"
-                value={profGoalCals}
-                onChange={e => setProfGoalCals(e.target.value)}
-                placeholder="ex: 2200"
-                className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full"
-              />
+              <label className="text-gray-400 text-xs mb-1 block">Objectif manuel (optionnel)</label>
+              <input type="number" value={profGoalCals} onChange={e => setProfGoalCals(e.target.value)} placeholder="ex: 2200"
+                className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full" />
             </div>
-
             {profAge && profile?.height_cm && profile?.weight_goal_kg && (
               <div className="bg-indigo-950 rounded-xl p-3">
                 <p className="text-indigo-300 text-sm">
@@ -532,11 +479,8 @@ export default function NutritionPage() {
                 </p>
               </div>
             )}
-
-            <button
-              onClick={handleSaveProfile}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl transition-colors"
-            >
+            <button onClick={handleSaveProfile}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl transition-colors">
               Enregistrer
             </button>
           </div>
