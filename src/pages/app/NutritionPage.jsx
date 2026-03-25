@@ -45,15 +45,12 @@ export default function NutritionPage() {
   const [showMealForm, setShowMealForm] = useState(false)
   const [showActivityForm, setShowActivityForm] = useState(false)
   const [showProfileForm, setShowProfileForm] = useState(false)
-  const [mealCat, setMealCat] = useState('déjeuner')
+  const [activeMealCat, setActiveMealCat] = useState('déjeuner')
   const [loading, setLoading] = useState(true)
 
-  // Activity form
   const [actName, setActName] = useState('')
   const [actCals, setActCals] = useState('')
   const [actDuration, setActDuration] = useState('')
-
-  // Profile form
   const [profAge, setProfAge] = useState('')
   const [profGender, setProfGender] = useState('homme')
   const [profActivity, setProfActivity] = useState('modere')
@@ -86,7 +83,6 @@ export default function NutritionPage() {
     setProfActivity(profileData?.activity_level || 'modere')
     setProfGoalCals(profileData?.calorie_goal?.toString() || '')
 
-    // Semaine
     const dates = []
     for (let i = 6; i >= 0; i--) {
       const d = new Date()
@@ -94,17 +90,16 @@ export default function NutritionPage() {
       dates.push(d.toISOString().split('T')[0])
     }
 
-    const { data: weekMeals } = await supabase
-      .from('meal_entries').select('date, calories').eq('user_id', user.id).in('date', dates)
+    const { data: weekMeals } = await supabase.from('meal_entries').select('date, calories').eq('user_id', user.id).in('date', dates)
+    const { data: weekActs } = await supabase.from('activity_entries').select('date, calories_burned').eq('user_id', user.id).in('date', dates)
 
-    const { data: weekActs } = await supabase
-      .from('activity_entries').select('date, calories_burned').eq('user_id', user.id).in('date', dates)
-
-    const mapped = dates.map(date => {
-      const ingested = (weekMeals || []).filter(m => m.date === date).reduce((s, m) => s + m.calories, 0)
-      const burned = (weekActs || []).filter(a => a.date === date).reduce((s, a) => s + a.calories_burned, 0)
-      return { date, label: formatDate(date), ingested, burned, net: ingested - burned, isToday: date === today }
-    })
+    const mapped = dates.map(date => ({
+      date,
+      label: formatDate(date),
+      ingested: (weekMeals || []).filter(m => m.date === date).reduce((s, m) => s + m.calories, 0),
+      burned: (weekActs || []).filter(a => a.date === date).reduce((s, a) => s + a.calories_burned, 0),
+      isToday: date === today,
+    }))
 
     setWeekData(mapped)
     setLoading(false)
@@ -154,7 +149,6 @@ export default function NutritionPage() {
       activity_level: profActivity,
       current_weight: currentWeight,
     })
-
     await supabase.from('user_profile').upsert({
       user_id: user.id,
       height_cm: profile?.height_cm,
@@ -164,7 +158,6 @@ export default function NutritionPage() {
       activity_level: profActivity,
       calorie_goal: profGoalCals ? parseInt(profGoalCals) : tdee,
     }, { onConflict: 'user_id' })
-
     setShowProfileForm(false)
     fetchData()
   }
@@ -186,10 +179,10 @@ export default function NutritionPage() {
   )
 
   const totalIngested = meals.reduce((s, m) => s + m.calories, 0)
-  const totalProteins = meals.reduce((s, m) => s + (m.proteins || 0), 0)
-  const totalCarbs = meals.reduce((s, m) => s + (m.carbs || 0), 0)
-  const totalFats = meals.reduce((s, m) => s + (m.fats || 0), 0)
   const totalBurned = activities.reduce((s, a) => s + a.calories_burned, 0)
+  const totalProteins = Math.round(meals.reduce((s, m) => s + (m.proteins || 0), 0))
+  const totalCarbs = Math.round(meals.reduce((s, m) => s + (m.carbs || 0), 0))
+  const totalFats = Math.round(meals.reduce((s, m) => s + (m.fats || 0), 0))
   const netCalories = totalIngested - totalBurned
 
   const tdee = calculateTDEE({ ...profile, current_weight: currentWeight })
@@ -226,7 +219,7 @@ export default function NutritionPage() {
             <p className="text-gray-500 text-xs mt-1">Dépensées</p>
           </div>
           <div className="text-center">
-            <p className={`text-2xl font-bold ${netCalories > (calorieGoal || 9999) ? 'text-red-400' : 'text-white'}`}>
+            <p className={`text-2xl font-bold ${calorieGoal && netCalories > calorieGoal ? 'text-red-400' : 'text-white'}`}>
               {netCalories}
             </p>
             <p className="text-gray-500 text-xs mt-1">Net</p>
@@ -237,71 +230,46 @@ export default function NutritionPage() {
           <>
             <div className="w-full bg-gray-800 rounded-full h-2 mb-2">
               <div
-                className={`h-2 rounded-full transition-all duration-500 ${
-                  netCalories > calorieGoal ? 'bg-red-500' : 'bg-green-500'
-                }`}
+                className={`h-2 rounded-full transition-all duration-500 ${netCalories > calorieGoal ? 'bg-red-500' : 'bg-green-500'}`}
                 style={{ width: `${Math.min((netCalories / calorieGoal) * 100, 100)}%` }}
               />
             </div>
-            <p className="text-gray-500 text-xs mb-3">
-              Objectif : {calorieGoal} kcal/jour
-              {tdee && !profile?.calorie_goal && ' (calculé automatiquement)'}
-            </p>
+            <p className="text-gray-500 text-xs mb-3">Objectif : {calorieGoal} kcal/jour</p>
           </>
         )}
 
-        {/* Macros */}
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-gray-800 rounded-xl p-2 text-center">
-            <p className="text-blue-400 font-bold text-sm">{Math.round(totalProteins)}g</p>
+            <p className="text-blue-400 font-bold text-sm">{totalProteins}g</p>
             <p className="text-gray-500 text-xs">Protéines</p>
           </div>
           <div className="bg-gray-800 rounded-xl p-2 text-center">
-            <p className="text-yellow-400 font-bold text-sm">{Math.round(totalCarbs)}g</p>
+            <p className="text-yellow-400 font-bold text-sm">{totalCarbs}g</p>
             <p className="text-gray-500 text-xs">Glucides</p>
           </div>
           <div className="bg-gray-800 rounded-xl p-2 text-center">
-            <p className="text-red-400 font-bold text-sm">{Math.round(totalFats)}g</p>
+            <p className="text-red-400 font-bold text-sm">{totalFats}g</p>
             <p className="text-gray-500 text-xs">Lipides</p>
           </div>
         </div>
-
-        {!calorieGoal && (
-          <button onClick={() => setShowProfileForm(true)} className="text-indigo-400 text-sm mt-3">
-            → Configurer mon objectif calorique
-          </button>
-        )}
       </div>
 
       {/* Repas par catégorie */}
       <div className="bg-gray-900 rounded-2xl p-5 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-white font-semibold">Repas</h2>
-          <div className="flex gap-2">
-            {CATEGORIES.map(cat => (
-              <button
-                key={cat}
-                onClick={() => { setMealCat(cat); setShowMealForm(true) }}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white p-1.5 rounded-lg transition-colors"
-                title={cat}
-              >
-                <Plus size={18} />
-              </button>
-            )).slice(0, 1)}
-            <button
-              onClick={() => setShowMealForm(true)}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white p-1.5 rounded-lg transition-colors"
-            >
-              <Plus size={18} />
-            </button>
-          </div>
-        </div>
-
+        <h2 className="text-white font-semibold">Repas</h2>
         {byCategory.map(({ cat, total, items }) => (
           <div key={cat}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-gray-400 text-sm capitalize">{cat}</span>
-              {total > 0 && <span className="text-gray-400 text-sm">{total} kcal</span>}
+              <div className="flex items-center gap-2">
+                {total > 0 && <span className="text-gray-400 text-sm">{total} kcal</span>}
+                <button
+                  onClick={() => { setActiveMealCat(cat); setShowMealForm(true) }}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white p-1 rounded-lg transition-colors"
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
             </div>
             {items.length > 0 ? (
               <div className="flex flex-col gap-2">
@@ -352,9 +320,7 @@ export default function NutritionPage() {
               <div key={act.id} className="flex items-center justify-between bg-gray-800 rounded-xl px-3 py-2">
                 <div>
                   <span className="text-white text-sm">{act.name}</span>
-                  {act.duration_minutes && (
-                    <span className="text-gray-500 text-xs ml-2">{act.duration_minutes} min</span>
-                  )}
+                  {act.duration_minutes && <span className="text-gray-500 text-xs ml-2">{act.duration_minutes} min</span>}
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-green-400 text-sm font-medium">-{act.calories_burned} kcal</span>
@@ -377,7 +343,7 @@ export default function NutritionPage() {
             <YAxis hide />
             <Tooltip
               contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '12px' }}
-              formatter={(value, name) => [`${value} kcal`, name === 'ingested' ? 'Ingérées' : 'Dépensées']}
+              formatter={(value) => [`${value} kcal`, 'Ingérées']}
             />
             <Bar dataKey="ingested" radius={[6, 6, 0, 0]}>
               {weekData.map((entry, i) => (
@@ -388,10 +354,10 @@ export default function NutritionPage() {
         </ResponsiveContainer>
       </div>
 
-      {/* Modal FoodSearch */}
+      {/* Modal recherche aliment */}
       {showMealForm && (
         <FoodSearch
-          category={mealCat}
+          category={activeMealCat}
           onAdd={handleAddMeal}
           onClose={() => setShowMealForm(false)}
         />
@@ -405,14 +371,11 @@ export default function NutritionPage() {
               <h2 className="text-white font-semibold">Ajouter une activité</h2>
               <button onClick={() => setShowActivityForm(false)}><X size={22} className="text-gray-400" /></button>
             </div>
-            <input type="text" placeholder="Activité (ex: Course à pied)" value={actName}
-              onChange={e => setActName(e.target.value)}
+            <input type="text" placeholder="Activité (ex: Course à pied)" value={actName} onChange={e => setActName(e.target.value)}
               className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
-            <input type="number" placeholder="Calories brûlées (kcal)" value={actCals}
-              onChange={e => setActCals(e.target.value)}
+            <input type="number" placeholder="Calories brûlées (kcal)" value={actCals} onChange={e => setActCals(e.target.value)}
               className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" />
-            <input type="number" placeholder="Durée (minutes, optionnel)" value={actDuration}
-              onChange={e => setActDuration(e.target.value)}
+            <input type="number" placeholder="Durée (minutes, optionnel)" value={actDuration} onChange={e => setActDuration(e.target.value)}
               className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" />
             <button onClick={handleAddActivity} disabled={!actName || !actCals}
               className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors">

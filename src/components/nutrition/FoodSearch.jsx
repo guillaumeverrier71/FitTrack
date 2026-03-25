@@ -20,11 +20,11 @@ export default function FoodSearch({ category, onAdd, onClose }) {
       const { data: { user } } = await supabase.auth.getUser()
       const { data } = await supabase
         .from('meal_entries')
-        .select('name, calories, proteins, carbs, fats, quantity_g, food_id, foods(name, calories_per_100g, proteins_per_100g, carbs_per_100g, fats_per_100g)')
+        .select('food_id, foods(id, name, calories_per_100g, proteins_per_100g, carbs_per_100g, fats_per_100g, unit)')
         .eq('user_id', user.id)
         .not('food_id', 'is', null)
         .order('created_at', { ascending: false })
-        .limit(5)
+        .limit(10)
 
       if (data) {
         const unique = []
@@ -35,7 +35,7 @@ export default function FoodSearch({ category, onAdd, onClose }) {
             unique.push(d.foods)
           }
         })
-        setRecent(unique)
+        setRecent(unique.slice(0, 5))
       }
     }
     fetchRecent()
@@ -57,21 +57,27 @@ export default function FoodSearch({ category, onAdd, onClose }) {
 
   const handleSelect = (food) => {
     setSelected(food)
-    setQuantity('100')
+    setQuantity(food.unit === 'unité' ? '1' : '100')
   }
 
-  const calcMacro = (per100g, qty) => Math.round((per100g * qty) / 100 * 10) / 10
+  const calcMacro = (per100g, qty, isUnit) => {
+    const multiplier = isUnit ? qty : qty / 100
+    return Math.round(per100g * multiplier * 10) / 10
+  }
 
   const handleAdd = () => {
     if (!selected) return
-    const qty = parseFloat(quantity) || 100
+    const qty = parseFloat(quantity) || 1
+    const isUnit = selected.unit === 'unité'
+    const multiplier = isUnit ? qty : qty / 100
+
     onAdd({
-      name: `${selected.name} (${qty}g)`,
-      calories: Math.round(calcMacro(selected.calories_per_100g, qty)),
-      proteins: calcMacro(selected.proteins_per_100g, qty),
-      carbs: calcMacro(selected.carbs_per_100g, qty),
-      fats: calcMacro(selected.fats_per_100g, qty),
-      quantity_g: qty,
+      name: isUnit ? `${selected.name} × ${qty}` : `${selected.name} (${qty}g)`,
+      calories: Math.round(selected.calories_per_100g * multiplier),
+      proteins: Math.round(selected.proteins_per_100g * multiplier * 10) / 10,
+      carbs: Math.round(selected.carbs_per_100g * multiplier * 10) / 10,
+      fats: Math.round(selected.fats_per_100g * multiplier * 10) / 10,
+      quantity_g: isUnit ? qty * 100 : qty,
       food_id: selected.id,
       category,
     })
@@ -94,27 +100,30 @@ export default function FoodSearch({ category, onAdd, onClose }) {
   }
 
   const displayList = query.trim() ? results : recent
+  const isUnit = selected?.unit === 'unité'
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-end">
       <div className="bg-gray-900 w-full rounded-t-3xl max-h-[90vh] flex flex-col">
 
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-800">
-          <h2 className="text-white font-semibold">Ajouter un aliment</h2>
+          <h2 className="text-white font-semibold capitalize">Ajouter — {category}</h2>
           <button onClick={onClose}><X size={22} className="text-gray-400" /></button>
         </div>
 
         {selected ? (
-          /* Vue quantité */
           <div className="flex flex-col gap-4 p-4">
             <div className="bg-gray-800 rounded-xl p-4">
               <p className="text-white font-semibold mb-1">{selected.name}</p>
-              <p className="text-gray-400 text-xs">Pour 100g : {selected.calories_per_100g} kcal · {selected.proteins_per_100g}g prot · {selected.carbs_per_100g}g gluc · {selected.fats_per_100g}g lip</p>
+              <p className="text-gray-400 text-xs">
+                Pour {isUnit ? '1 unité' : '100g'} : {selected.calories_per_100g} kcal · {selected.proteins_per_100g}g prot · {selected.carbs_per_100g}g gluc · {selected.fats_per_100g}g lip
+              </p>
             </div>
 
             <div>
-              <label className="text-gray-400 text-xs mb-1 block">Quantité (g)</label>
+              <label className="text-gray-400 text-xs mb-1 block">
+                {isUnit ? 'Nombre d\'unités' : 'Quantité (g)'}
+              </label>
               <input
                 type="number"
                 value={quantity}
@@ -124,13 +133,12 @@ export default function FoodSearch({ category, onAdd, onClose }) {
               />
             </div>
 
-            {/* Aperçu macros */}
             <div className="grid grid-cols-4 gap-2">
               {[
-                { label: 'Calories', value: Math.round(calcMacro(selected.calories_per_100g, parseFloat(quantity) || 0)), unit: 'kcal', color: 'text-orange-400' },
-                { label: 'Protéines', value: calcMacro(selected.proteins_per_100g, parseFloat(quantity) || 0), unit: 'g', color: 'text-blue-400' },
-                { label: 'Glucides', value: calcMacro(selected.carbs_per_100g, parseFloat(quantity) || 0), unit: 'g', color: 'text-yellow-400' },
-                { label: 'Lipides', value: calcMacro(selected.fats_per_100g, parseFloat(quantity) || 0), unit: 'g', color: 'text-red-400' },
+                { label: 'Calories', value: Math.round(calcMacro(selected.calories_per_100g, parseFloat(quantity) || 0, isUnit)), unit: 'kcal', color: 'text-orange-400' },
+                { label: 'Protéines', value: calcMacro(selected.proteins_per_100g, parseFloat(quantity) || 0, isUnit), unit: 'g', color: 'text-blue-400' },
+                { label: 'Glucides', value: calcMacro(selected.carbs_per_100g, parseFloat(quantity) || 0, isUnit), unit: 'g', color: 'text-yellow-400' },
+                { label: 'Lipides', value: calcMacro(selected.fats_per_100g, parseFloat(quantity) || 0, isUnit), unit: 'g', color: 'text-red-400' },
               ].map(macro => (
                 <div key={macro.label} className="bg-gray-800 rounded-xl p-2 text-center">
                   <p className={`font-bold text-sm ${macro.color}`}>{macro.value}</p>
@@ -141,22 +149,15 @@ export default function FoodSearch({ category, onAdd, onClose }) {
             </div>
 
             <div className="flex gap-2">
-              <button
-                onClick={() => setSelected(null)}
-                className="flex-1 bg-gray-800 text-gray-400 font-semibold py-3 rounded-xl"
-              >
+              <button onClick={() => setSelected(null)} className="flex-1 bg-gray-800 text-gray-400 font-semibold py-3 rounded-xl">
                 Retour
               </button>
-              <button
-                onClick={handleAdd}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl"
-              >
+              <button onClick={handleAdd} className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl">
                 Ajouter
               </button>
             </div>
           </div>
         ) : showCustomForm ? (
-          /* Formulaire aliment custom */
           <div className="flex flex-col gap-3 p-4 overflow-y-auto">
             <p className="text-gray-400 text-sm">Valeurs pour 100g</p>
             <input type="text" placeholder="Nom de l'aliment" value={customName} onChange={e => setCustomName(e.target.value)}
@@ -170,8 +171,7 @@ export default function FoodSearch({ category, onAdd, onClose }) {
             <input type="number" placeholder="Lipides (g)" value={customFats} onChange={e => setCustomFats(e.target.value)}
               className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" />
             <div className="flex gap-2">
-              <button onClick={() => setShowCustomForm(false)}
-                className="flex-1 bg-gray-800 text-gray-400 font-semibold py-3 rounded-xl">
+              <button onClick={() => setShowCustomForm(false)} className="flex-1 bg-gray-800 text-gray-400 font-semibold py-3 rounded-xl">
                 Retour
               </button>
               <button onClick={handleAddCustom} disabled={!customName || !customCals}
@@ -181,7 +181,6 @@ export default function FoodSearch({ category, onAdd, onClose }) {
             </div>
           </div>
         ) : (
-          /* Recherche */
           <div className="flex flex-col flex-1 overflow-hidden">
             <div className="p-4 flex flex-col gap-3">
               <div className="flex items-center gap-2 bg-gray-800 rounded-xl px-4 py-3">
@@ -195,10 +194,7 @@ export default function FoodSearch({ category, onAdd, onClose }) {
                   autoFocus
                 />
               </div>
-              <button
-                onClick={() => setShowCustomForm(true)}
-                className="flex items-center gap-2 text-indigo-400 text-sm"
-              >
+              <button onClick={() => setShowCustomForm(true)} className="flex items-center gap-2 text-indigo-400 text-sm">
                 <Plus size={16} /> Ajouter un aliment personnalisé
               </button>
             </div>
@@ -214,15 +210,13 @@ export default function FoodSearch({ category, onAdd, onClose }) {
                 <p className="text-gray-500 text-sm text-center py-4">Aucun résultat pour "{query}"</p>
               )}
               {displayList.map(food => (
-                <button
-                  key={food.id}
-                  onClick={() => handleSelect(food)}
-                  className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3 text-left hover:bg-gray-700 transition-colors"
-                >
+                <button key={food.id} onClick={() => handleSelect(food)}
+                  className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3 text-left hover:bg-gray-700 transition-colors">
                   <div>
                     <p className="text-white text-sm font-medium">{food.name}</p>
                     <p className="text-gray-400 text-xs mt-0.5">
                       {food.calories_per_100g} kcal · {food.proteins_per_100g}g prot · {food.carbs_per_100g}g gluc · {food.fats_per_100g}g lip
+                      {food.unit === 'unité' ? ' (par unité)' : ' (par 100g)'}
                     </p>
                   </div>
                   <Plus size={18} className="text-indigo-400 ml-3 shrink-0" />
