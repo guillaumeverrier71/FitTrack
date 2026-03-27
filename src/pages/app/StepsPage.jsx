@@ -4,6 +4,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLin
 import { Footprints, Flame, Target, Pencil, Check, X } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
 import { handleSupabaseError } from '../../lib/handleError'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
+import { offlineQueue } from '../../lib/offlineQueue'
 
 const CALORIES_PER_STEP = 0.04
 
@@ -83,6 +85,7 @@ function formatDayLabel(dateStr) {
 
 export default function StepsPage() {
   const toast = useToast()
+  const isOnline = useOnlineStatus()
   const [period, setPeriod] = useState('week')
   const [chartData, setChartData] = useState([])
   const [today, setToday] = useState(null)
@@ -157,8 +160,27 @@ export default function StepsPage() {
     fetchData()
   }, [period])
 
+  useEffect(() => {
+    const handler = () => fetchData()
+    window.addEventListener('bp-sync-complete', handler)
+    return () => window.removeEventListener('bp-sync-complete', handler)
+  }, [])
+
   const handleSaveToday = async () => {
     try {
+      if (!isOnline) {
+        const { data: { user } } = await supabase.auth.getUser()
+        offlineQueue.add('upsert', 'daily_steps', {
+          user_id: user.id,
+          date: getToday(),
+          steps: parseInt(inputSteps) || 0,
+          goal: parseInt(inputGoal) || 10000,
+        }, { upsertOptions: { onConflict: 'user_id,date' } })
+        setToday(prev => ({ ...prev, steps: parseInt(inputSteps) || 0, goal: parseInt(inputGoal) || 10000 }))
+        setEditing(false)
+        toast.info('Pas enregistrés hors-ligne — seront synchronisés à la reconnexion.')
+        return
+      }
       const { data: { user } } = await supabase.auth.getUser()
       await supabase.from('daily_steps').upsert({
         user_id: user.id,
@@ -183,6 +205,20 @@ export default function StepsPage() {
   const handleSaveDay = async () => {
     setSaving(true)
     try {
+      if (!isOnline) {
+        const { data: { user } } = await supabase.auth.getUser()
+        offlineQueue.add('upsert', 'daily_steps', {
+          user_id: user.id,
+          date: openDate,
+          steps: parseInt(editInputSteps) || 0,
+          goal: parseInt(editInputGoal) || 10000,
+        }, { upsertOptions: { onConflict: 'user_id,date' } })
+        setDailyList(prev => prev.map(e => e.date === openDate ? { ...e, steps: parseInt(editInputSteps) || 0, goal: parseInt(editInputGoal) || 10000 } : e))
+        setSaving(false)
+        setOpenDate(null)
+        toast.info('Pas enregistrés hors-ligne — seront synchronisés à la reconnexion.')
+        return
+      }
       const { data: { user } } = await supabase.auth.getUser()
       await supabase.from('daily_steps').upsert({
         user_id: user.id,

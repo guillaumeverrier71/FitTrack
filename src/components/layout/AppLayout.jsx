@@ -6,6 +6,8 @@ import WorkoutSession from '../workouts/WorkoutSession'
 import OnboardingModal from '../onboarding/OnboardingModal'
 import { supabase } from '../../lib/supabase'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
+import { useOfflineSync } from '../../hooks/useOfflineSync'
+import { useToast } from '../../context/ToastContext'
 
 const navItems = [
   { to: '/', icon: Home, label: 'Accueil' },
@@ -19,8 +21,18 @@ const navItems = [
 export default function AppLayout() {
   const { activeSession, sessionVisible, minimizeSession, resumeSession, closeSession } = useSession()
   const isOnline = useOnlineStatus()
+  const toast = useToast()
+  const { syncing, pendingCount } = useOfflineSync()
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [onboardingUserId, setOnboardingUserId] = useState(null)
+
+  useEffect(() => {
+    const handler = (e) => {
+      toast.success(`${e.detail.count} modification${e.detail.count > 1 ? 's' : ''} synchronisée${e.detail.count > 1 ? 's' : ''} !`)
+    }
+    window.addEventListener('bp-sync-complete', handler)
+    return () => window.removeEventListener('bp-sync-complete', handler)
+  }, [toast])
 
   useEffect(() => {
     const checkOnboarding = async () => {
@@ -62,10 +74,21 @@ export default function AppLayout() {
         </div>
       )}
 
-      {!isOnline && (
+      {(!isOnline || syncing) && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-gray-400" />
-          <p className="text-gray-300 text-xs font-medium">Hors-ligne — données en cache</p>
+          {syncing ? (
+            <>
+              <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+              <p className="text-indigo-300 text-xs font-medium">Synchronisation en cours...</p>
+            </>
+          ) : (
+            <>
+              <div className="w-2 h-2 rounded-full bg-gray-400" />
+              <p className="text-gray-300 text-xs font-medium">
+                Hors-ligne{pendingCount > 0 ? ` — ${pendingCount} modification${pendingCount > 1 ? 's' : ''} en attente` : ' — données en cache'}
+              </p>
+            </>
+          )}
         </div>
       )}
 

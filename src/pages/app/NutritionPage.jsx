@@ -5,6 +5,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import FoodSearch from '../../components/nutrition/FoodSearch'
 import { useToast } from '../../context/ToastContext'
 import { handleSupabaseError } from '../../lib/handleError'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
+import { offlineQueue } from '../../lib/offlineQueue'
 
 const CATEGORIES = ['petit-déj', 'déjeuner', 'dîner', 'snack']
 const ACTIVITY_LEVELS = {
@@ -40,6 +42,7 @@ function calculateTDEE(profile) {
 
 export default function NutritionPage() {
   const toast = useToast()
+  const isOnline = useOnlineStatus()
   const [meals, setMeals] = useState([])
   const [activities, setActivities] = useState([])
   const [profile, setProfile] = useState(null)
@@ -122,8 +125,34 @@ export default function NutritionPage() {
 
   useEffect(() => { fetchData() }, [])
 
+  useEffect(() => {
+    const handler = () => fetchData()
+    window.addEventListener('bp-sync-complete', handler)
+    return () => window.removeEventListener('bp-sync-complete', handler)
+  }, [])
+
   const handleAddMeal = async (foodData) => {
     try {
+      if (!isOnline) {
+        const { data: { user } } = await supabase.auth.getUser()
+        const offlineId = `offline_${Date.now()}`
+        const qId = offlineQueue.add('insert', 'meal_entries', {
+          user_id: user.id,
+          date: getToday(),
+          name: foodData.name,
+          calories: foodData.calories,
+          proteins: foodData.proteins || 0,
+          carbs: foodData.carbs || 0,
+          fats: foodData.fats || 0,
+          quantity_g: foodData.quantity_g || 100,
+          food_id: foodData.food_id || null,
+          category: foodData.category,
+        })
+        setMeals(prev => [...prev, { id: offlineId, _queueId: qId, name: foodData.name, calories: foodData.calories, proteins: foodData.proteins || 0, carbs: foodData.carbs || 0, fats: foodData.fats || 0, category: foodData.category }])
+        setShowMealForm(false)
+        toast.info('Ajouté hors-ligne — sera synchronisé à la reconnexion.')
+        return
+      }
       const { data: { user } } = await supabase.auth.getUser()
       await supabase.from('meal_entries').insert({
         user_id: user.id,
@@ -147,6 +176,22 @@ export default function NutritionPage() {
 
   const handleAddActivity = async () => {
     try {
+      if (!isOnline) {
+        const { data: { user } } = await supabase.auth.getUser()
+        const offlineId = `offline_${Date.now()}`
+        const qId = offlineQueue.add('insert', 'activity_entries', {
+          user_id: user.id,
+          date: getToday(),
+          name: actName.trim(),
+          calories_burned: parseInt(actCals),
+          duration_minutes: parseInt(actDuration) || null,
+        })
+        setActivities(prev => [...prev, { id: offlineId, _queueId: qId, name: actName.trim(), calories_burned: parseInt(actCals), duration_minutes: parseInt(actDuration) || null }])
+        setActName(''); setActCals(''); setActDuration('')
+        setShowActivityForm(false)
+        toast.info('Activité ajoutée hors-ligne — sera synchronisée à la reconnexion.')
+        return
+      }
       const { data: { user } } = await supabase.auth.getUser()
       await supabase.from('activity_entries').insert({
         user_id: user.id,
@@ -216,6 +261,17 @@ export default function NutritionPage() {
   }
 
   const handleDeleteMeal = async (id) => {
+    if (id.toString().startsWith('offline_')) {
+      const meal = meals.find(m => m.id === id)
+      if (meal?._queueId) offlineQueue.remove(meal._queueId)
+      setMeals(prev => prev.filter(m => m.id !== id))
+      return
+    }
+    if (!isOnline) {
+      offlineQueue.add('delete', 'meal_entries', null, { match: { id } })
+      setMeals(prev => prev.filter(m => m.id !== id))
+      return
+    }
     try {
       await supabase.from('meal_entries').delete().eq('id', id)
       fetchData()
@@ -225,6 +281,17 @@ export default function NutritionPage() {
   }
 
   const handleDeleteActivity = async (id) => {
+    if (id.toString().startsWith('offline_')) {
+      const act = activities.find(a => a.id === id)
+      if (act?._queueId) offlineQueue.remove(act._queueId)
+      setActivities(prev => prev.filter(a => a.id !== id))
+      return
+    }
+    if (!isOnline) {
+      offlineQueue.add('delete', 'activity_entries', null, { match: { id } })
+      setActivities(prev => prev.filter(a => a.id !== id))
+      return
+    }
     try {
       await supabase.from('activity_entries').delete().eq('id', id)
       fetchData()

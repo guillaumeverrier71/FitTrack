@@ -22,6 +22,8 @@ function formatTime(seconds) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+const DEFAULT_REST = 90
+
 export default function WorkoutSession({ template, onMinimize, onDone }) {
   const toast = useToast()
   const [sessionId, setSessionId] = useState(null)
@@ -31,6 +33,10 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
   const [elapsed, setElapsed] = useState(0)
   const [paused, setPaused] = useState(false)
   const [confirmAbandon, setConfirmAbandon] = useState(false)
+
+  // Rest timer
+  const [restTimer, setRestTimer] = useState({ active: false, remaining: DEFAULT_REST, total: DEFAULT_REST })
+
   const intervalRef = useRef(null)
 
   useEffect(() => {
@@ -40,6 +46,21 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
     }, 1000)
     return () => clearInterval(intervalRef.current)
   }, [paused])
+
+  // Rest timer countdown
+  useEffect(() => {
+    if (!restTimer.active) return
+    const id = setInterval(() => {
+      setRestTimer(prev => {
+        if (prev.remaining <= 1) {
+          navigator.vibrate?.([200, 100, 200])
+          return { ...prev, active: false, remaining: 0 }
+        }
+        return { ...prev, remaining: prev.remaining - 1 }
+      })
+    }, 1000)
+    return () => clearInterval(id)
+  }, [restTimer.active])
 
   const exercises = template.template_exercises || []
 
@@ -115,12 +136,16 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
   }
 
   const toggleDone = (exerciseId, setIndex) => {
+    const wasDone = sets[exerciseId]?.[setIndex]?.done
     setSets(prev => ({
       ...prev,
       [exerciseId]: prev[exerciseId].map((s, i) =>
         i === setIndex ? { ...s, done: !s.done } : s
       )
     }))
+    if (!wasDone) {
+      setRestTimer({ active: true, remaining: DEFAULT_REST, total: DEFAULT_REST })
+    }
   }
 
   const addSet = (exerciseId) => {
@@ -128,6 +153,11 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
       ...prev,
       [exerciseId]: [...prev[exerciseId], { reps: 10, weight: 0, done: false }]
     }))
+  }
+
+  const skipRest = () => setRestTimer(prev => ({ ...prev, active: false }))
+  const adjustRest = (delta) => {
+    setRestTimer(prev => ({ ...prev, remaining: Math.max(5, prev.remaining + delta) }))
   }
 
   const handleFinish = async () => {
@@ -182,6 +212,10 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
     onDone()
   }
 
+  // Rest timer progress
+  const restCircumference = 2 * Math.PI * 22
+  const restProgress = restTimer.active ? restTimer.remaining / restTimer.total : 0
+
   return (
     <div className="h-full bg-gray-950 flex flex-col">
       {/* Header */}
@@ -206,7 +240,7 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
       </div>
 
       {/* Exercices */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 pb-32">
+      <div className={`flex-1 overflow-y-auto p-4 flex flex-col gap-6 ${restTimer.active ? 'pb-56' : 'pb-32'}`}>
         {exercises.map(ex => {
           const lastExSets = lastSession[ex.exercise_id] || []
 
@@ -300,21 +334,77 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
         })}
       </div>
 
-      {/* Boutons bas */}
-      <div className="fixed bottom-16 left-0 right-0 p-4 bg-gray-950 border-t border-gray-800 flex gap-3">
-        <button
-          onClick={() => setConfirmAbandon(true)}
-          className="bg-gray-800 hover:bg-red-950 text-red-400 font-semibold py-4 px-5 rounded-xl transition-colors"
-        >
-          Abandonner
-        </button>
-        <button
-          onClick={handleFinish}
-          disabled={saving}
-          className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-semibold py-4 rounded-xl transition-colors"
-        >
-          {saving ? 'Enregistrement...' : 'Terminer ✓'}
-        </button>
+      {/* Boutons bas + minuteur de repos */}
+      <div className="fixed bottom-16 left-0 right-0 bg-gray-950 border-t border-gray-800">
+
+        {/* Minuteur de repos */}
+        {restTimer.active && (
+          <div className="px-4 pt-3 pb-2 border-b border-gray-800">
+            <div className="flex items-center gap-4">
+              {/* Arc de progression */}
+              <div className="relative w-14 h-14 shrink-0">
+                <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
+                  <circle cx="28" cy="28" r="22" fill="none" stroke="#1f2937" strokeWidth="5" />
+                  <circle
+                    cx="28" cy="28" r="22"
+                    fill="none"
+                    stroke={restTimer.remaining <= 10 ? '#ef4444' : '#6366f1'}
+                    strokeWidth="5"
+                    strokeDasharray={restCircumference}
+                    strokeDashoffset={restCircumference * (1 - restProgress)}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke-dashoffset 1s linear, stroke 0.3s' }}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className={`font-mono font-bold text-sm ${restTimer.remaining <= 10 ? 'text-red-400' : 'text-white'}`}>
+                    {formatTime(restTimer.remaining)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex-1">
+                <p className="text-gray-400 text-xs mb-1.5">Temps de repos</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => adjustRest(-30)}
+                    className="flex-1 bg-gray-800 text-gray-400 text-sm py-1.5 rounded-xl"
+                  >
+                    −30s
+                  </button>
+                  <button
+                    onClick={skipRest}
+                    className="flex-1 bg-indigo-600 text-white text-sm py-1.5 rounded-xl font-medium"
+                  >
+                    Passer
+                  </button>
+                  <button
+                    onClick={() => adjustRest(30)}
+                    className="flex-1 bg-gray-800 text-gray-400 text-sm py-1.5 rounded-xl"
+                  >
+                    +30s
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="p-4 flex gap-3">
+          <button
+            onClick={() => setConfirmAbandon(true)}
+            className="bg-gray-800 hover:bg-red-950 text-red-400 font-semibold py-4 px-5 rounded-xl transition-colors"
+          >
+            Abandonner
+          </button>
+          <button
+            onClick={handleFinish}
+            disabled={saving}
+            className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-semibold py-4 rounded-xl transition-colors"
+          >
+            {saving ? 'Enregistrement...' : 'Terminer ✓'}
+          </button>
+        </div>
       </div>
 
       {confirmAbandon && (

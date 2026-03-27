@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Search, Plus, X, Clock, Globe, Loader } from 'lucide-react'
+import { Search, Plus, X, Clock, Globe, Loader, Camera, AlertCircle } from 'lucide-react'
+import BarcodeScanner from './BarcodeScanner'
 
 async function searchOpenFoodFacts(query) {
   try {
@@ -27,6 +28,32 @@ async function searchOpenFoodFacts(query) {
   }
 }
 
+async function fetchByBarcode(barcode) {
+  try {
+    const res = await fetch(
+      `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`,
+      { signal: AbortSignal.timeout(5000) }
+    )
+    const data = await res.json()
+    if (data.status !== 1 || !data.product) return null
+    const p = data.product
+    const n = p.nutriments || {}
+    return {
+      id: `off_${barcode}`,
+      name: p.product_name || p.product_name_fr || 'Produit scanné',
+      calories_per_100g: Math.round(n['energy-kcal_100g'] || 0),
+      proteins_per_100g: Math.round((n.proteins_100g || 0) * 10) / 10,
+      carbs_per_100g: Math.round((n.carbohydrates_100g || 0) * 10) / 10,
+      fats_per_100g: Math.round((n.fat_100g || 0) * 10) / 10,
+      unit: 'g',
+      _off: true,
+      _code: barcode,
+    }
+  } catch {
+    return null
+  }
+}
+
 export default function FoodSearch({ category, onAdd, onClose }) {
   const [query, setQuery] = useState('')
   const [localResults, setLocalResults] = useState([])
@@ -36,6 +63,8 @@ export default function FoodSearch({ category, onAdd, onClose }) {
   const [selected, setSelected] = useState(null)
   const [quantity, setQuantity] = useState('100')
   const [showCustomForm, setShowCustomForm] = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
+  const [barcodeError, setBarcodeError] = useState(null)
   const [customName, setCustomName] = useState('')
   const [customCals, setCustomCals] = useState('')
   const [customProteins, setCustomProteins] = useState('')
@@ -76,7 +105,6 @@ export default function FoodSearch({ category, onAdd, onClose }) {
     }
 
     const timeout = setTimeout(async () => {
-      // Recherche locale
       const { data } = await supabase
         .from('foods')
         .select('*')
@@ -84,10 +112,8 @@ export default function FoodSearch({ category, onAdd, onClose }) {
         .limit(10)
       setLocalResults(data || [])
 
-      // Recherche OpenFoodFacts
       setOffLoading(true)
       const off = await searchOpenFoodFacts(query)
-      // Filtrer les doublons avec les résultats locaux
       const localNames = new Set((data || []).map(f => f.name.toLowerCase()))
       setOffResults(off.filter(f => !localNames.has(f.name.toLowerCase())))
       setOffLoading(false)
@@ -102,7 +128,6 @@ export default function FoodSearch({ category, onAdd, onClose }) {
   }
 
   const handleSelectOFF = async (food) => {
-    // Sauvegarder dans la table foods pour les prochaines recherches
     const { data: existing } = await supabase
       .from('foods')
       .select('id, name, calories_per_100g, proteins_per_100g, carbs_per_100g, fats_per_100g, unit')
@@ -121,6 +146,17 @@ export default function FoodSearch({ category, onAdd, onClose }) {
         unit: 'g',
       }).select().single()
       handleSelect(inserted || food)
+    }
+  }
+
+  const handleBarcodeScan = async (barcode) => {
+    setShowScanner(false)
+    setBarcodeError(null)
+    const food = await fetchByBarcode(barcode)
+    if (food) {
+      handleSelectOFF(food)
+    } else {
+      setBarcodeError(`Produit introuvable pour le code ${barcode}`)
     }
   }
 
@@ -167,6 +203,10 @@ export default function FoodSearch({ category, onAdd, onClose }) {
   const hasQuery = query.trim().length > 0
   const showRecent = !hasQuery && recent.length > 0
   const hasAnyResults = localResults.length > 0 || offResults.length > 0
+
+  if (showScanner) {
+    return <BarcodeScanner onDetect={handleBarcodeScan} onClose={() => setShowScanner(false)} />
+  }
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-end">
@@ -249,25 +289,41 @@ export default function FoodSearch({ category, onAdd, onClose }) {
         ) : (
           <div className="flex flex-col flex-1 overflow-hidden">
             <div className="p-4 flex flex-col gap-3">
-              <div className="flex items-center gap-2 bg-gray-800 rounded-xl px-4 py-3">
-                <Search size={18} className="text-gray-500" />
-                <input
-                  type="text"
-                  placeholder="Rechercher un aliment..."
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  className="bg-transparent text-white outline-none flex-1 placeholder-gray-500"
-                  autoFocus
-                />
-                {offLoading && <Loader size={16} className="text-gray-500 animate-spin shrink-0" />}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 bg-gray-800 rounded-xl px-4 py-3 flex-1">
+                  <Search size={18} className="text-gray-500 shrink-0" />
+                  <input
+                    type="text"
+                    placeholder="Rechercher un aliment..."
+                    value={query}
+                    onChange={e => { setQuery(e.target.value); setBarcodeError(null) }}
+                    className="bg-transparent text-white outline-none flex-1 placeholder-gray-500"
+                    autoFocus
+                  />
+                  {offLoading && <Loader size={16} className="text-gray-500 animate-spin shrink-0" />}
+                </div>
+                <button
+                  onClick={() => setShowScanner(true)}
+                  className="bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white p-3 rounded-xl transition-colors shrink-0"
+                  title="Scanner un code-barres"
+                >
+                  <Camera size={20} />
+                </button>
               </div>
+
+              {barcodeError && (
+                <div className="flex items-center gap-2 text-orange-400 text-xs px-1">
+                  <AlertCircle size={13} />
+                  <span>{barcodeError}</span>
+                </div>
+              )}
+
               <button onClick={() => setShowCustomForm(true)} className="flex items-center gap-2 text-indigo-400 text-sm">
                 <Plus size={16} /> Ajouter un aliment personnalisé
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 pb-4 flex flex-col gap-2">
-              {/* Récents */}
               {showRecent && (
                 <>
                   <div className="flex items-center gap-2 mb-1">
@@ -280,16 +336,10 @@ export default function FoodSearch({ category, onAdd, onClose }) {
                 </>
               )}
 
-              {/* Résultats locaux */}
-              {hasQuery && localResults.length > 0 && (
-                <>
-                  {localResults.map(food => (
-                    <FoodRow key={food.id} food={food} onSelect={handleSelect} />
-                  ))}
-                </>
-              )}
+              {hasQuery && localResults.length > 0 && localResults.map(food => (
+                <FoodRow key={food.id} food={food} onSelect={handleSelect} />
+              ))}
 
-              {/* Résultats OpenFoodFacts */}
               {hasQuery && offResults.length > 0 && (
                 <>
                   <div className="flex items-center gap-2 mt-2 mb-1">
@@ -297,12 +347,11 @@ export default function FoodSearch({ category, onAdd, onClose }) {
                     <span className="text-indigo-400 text-xs">OpenFoodFacts</span>
                   </div>
                   {offResults.map(food => (
-                    <FoodRow key={food.id} food={food} onSelect={handleSelectOFF} isOff />
+                    <FoodRow key={food.id} food={food} onSelect={handleSelectOFF} />
                   ))}
                 </>
               )}
 
-              {/* Aucun résultat */}
               {hasQuery && !offLoading && !hasAnyResults && (
                 <p className="text-gray-500 text-sm text-center py-4">Aucun résultat pour "{query}"</p>
               )}
@@ -314,7 +363,7 @@ export default function FoodSearch({ category, onAdd, onClose }) {
   )
 }
 
-function FoodRow({ food, onSelect, isOff = false }) {
+function FoodRow({ food, onSelect }) {
   return (
     <button
       onClick={() => onSelect(food)}
@@ -327,7 +376,7 @@ function FoodRow({ food, onSelect, isOff = false }) {
           {food.unit === 'unité' ? ' (par unité)' : ' (par 100g)'}
         </p>
       </div>
-      <Plus size={18} className={`ml-3 shrink-0 ${isOff ? 'text-indigo-400' : 'text-indigo-400'}`} />
+      <Plus size={18} className="text-indigo-400 ml-3 shrink-0" />
     </button>
   )
 }

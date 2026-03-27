@@ -4,6 +4,8 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import { Scale, Target, Pencil, TrendingDown, TrendingUp, Minus } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
 import { handleSupabaseError } from '../../lib/handleError'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
+import { offlineQueue } from '../../lib/offlineQueue'
 
 function getToday() {
   return new Date().toISOString().split('T')[0]
@@ -30,6 +32,7 @@ function getBMICategory(bmi) {
 
 export default function WeightPage() {
   const toast = useToast()
+  const isOnline = useOnlineStatus()
   const [entries, setEntries] = useState([])
   const [profile, setProfile] = useState(null)
   const [period, setPeriod] = useState(30)
@@ -78,8 +81,30 @@ export default function WeightPage() {
 
   useEffect(() => { fetchData() }, [period])
 
+  useEffect(() => {
+    const handler = () => fetchData()
+    window.addEventListener('bp-sync-complete', handler)
+    return () => window.removeEventListener('bp-sync-complete', handler)
+  }, [])
+
   const handleSaveWeight = async () => {
     try {
+      if (!isOnline) {
+        const { data: { user } } = await supabase.auth.getUser()
+        const today = getToday()
+        offlineQueue.add('upsert', 'weight_entries', {
+          user_id: user.id,
+          date: today,
+          weight_kg: parseFloat(inputWeight),
+        }, { upsertOptions: { onConflict: 'user_id,date' } })
+        setEntries(prev => {
+          const filtered = prev.filter(e => e.date !== today)
+          return [...filtered, { date: today, weight_kg: parseFloat(inputWeight) }].sort((a, b) => a.date.localeCompare(b.date))
+        })
+        setEditing(false)
+        toast.info('Poids enregistré hors-ligne — sera synchronisé à la reconnexion.')
+        return
+      }
       const { data: { user } } = await supabase.auth.getUser()
       await supabase.from('weight_entries').upsert({
         user_id: user.id,
