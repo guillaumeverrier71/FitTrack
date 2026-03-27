@@ -17,43 +17,46 @@ export default function ProgressTab() {
   const [loadingChart, setLoadingChart] = useState(false)
 
   useEffect(() => {
-    const fetchExercises = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoading(false); return }
+  const fetchExercises = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { console.log('Pas de user'); setLoading(false); return }
 
-      // Récupère tous les exercices loggés par cet utilisateur
-      const { data: sessions } = await supabase
-        .from('workout_sessions')
-        .select('id')
-        .eq('user_id', user.id)
-        .not('finished_at', 'is', null)
+    const { data: sessions, error: sessionsError } = await supabase
+      .from('workout_sessions')
+      .select('id')
+      .eq('user_id', user.id)
+      .not('finished_at', 'is', null)
 
-      if (!sessions?.length) { setLoading(false); return }
+    console.log('Sessions:', sessions, 'Erreur:', sessionsError)
+    if (!sessions?.length) { console.log('Pas de sessions'); setLoading(false); return }
 
-      const sessionIds = sessions.map(s => s.id)
+    const sessionIds = sessions.map(s => s.id)
 
-      const { data: sets } = await supabase
-        .from('session_sets')
-        .select('exercise_id, exercises(name)')
-        .in('session_id', sessionIds)
+    const { data: sets, error: setsError } = await supabase
+      .from('session_sets')
+      .select('exercise_id, exercises(name)')
+      .in('session_id', sessionIds)
 
-      if (sets) {
-        const unique = []
-        const seen = new Set()
-        sets.forEach(s => {
-          if (!seen.has(s.exercise_id)) {
-            seen.add(s.exercise_id)
-            unique.push({ id: s.exercise_id, name: s.exercises?.name })
-          }
-        })
-        const sorted = unique.filter(e => e.name).sort((a, b) => a.name.localeCompare(b.name))
-        setExercises(sorted)
-        if (sorted.length > 0) setSelected(sorted[0])
-      }
-      setLoading(false)
+    console.log('Sets:', sets, 'Erreur:', setsError)
+
+    if (sets) {
+      const unique = []
+      const seen = new Set()
+      sets.forEach(s => {
+        if (!seen.has(s.exercise_id)) {
+          seen.add(s.exercise_id)
+          unique.push({ id: s.exercise_id, name: s.exercises?.name })
+        }
+      })
+      const sorted = unique.filter(e => e.name).sort((a, b) => a.name.localeCompare(b.name))
+      console.log('Exercices trouvés:', sorted)
+      setExercises(sorted)
+      if (sorted.length > 0) setSelected(sorted[0])
     }
-    fetchExercises()
-  }, [])
+    setLoading(false)
+  }
+  fetchExercises()
+}, [])
 
   useEffect(() => {
     if (!selected) return
