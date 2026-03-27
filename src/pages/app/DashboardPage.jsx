@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { cache } from '../../lib/cache'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { Footprints, Dumbbell, Flame, Scale, Zap, CalendarDays } from 'lucide-react'
 
 
@@ -24,7 +26,10 @@ function timeAgo(dateStr) {
   return `Il y a ${Math.floor(diff / 1440)} jour(s)`
 }
 
+const CACHE_KEY = 'dashboard'
+
 export default function DashboardPage() {
+  const isOnline = useOnlineStatus()
   const [user, setUser] = useState(null)
   const [steps, setSteps] = useState(null)
   const [lastSession, setLastSession] = useState(null)
@@ -33,8 +38,26 @@ export default function DashboardPage() {
   const [weightData, setWeightData] = useState(null)
   const [caloriesData, setCaloriesData] = useState(null)
   const [weekSummary, setWeekSummary] = useState(null)
+  const [fromCache, setFromCache] = useState(false)
 
   useEffect(() => {
+    // Offline : charger depuis le cache
+    if (!isOnline) {
+      const cached = cache.get(CACHE_KEY)
+      if (cached) {
+        setUser(cached.user)
+        setSteps(cached.steps)
+        setLastSession(cached.lastSession)
+        setStreak(cached.streak)
+        setWeightData(cached.weightData)
+        setCaloriesData(cached.caloriesData)
+        setWeekSummary(cached.weekSummary)
+        setFromCache(true)
+      }
+      setLoading(false)
+      return
+    }
+
     const fetchAll = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
@@ -62,12 +85,7 @@ export default function DashboardPage() {
       const totalIngested = (mealsToday || []).reduce((s, m) => s + m.calories, 0)
       const totalBurned = (activitiesToday || []).reduce((s, a) => s + a.calories_burned, 0)
 
-      setCaloriesData({
-        ingested: totalIngested,
-        burned: totalBurned,
-        net: totalIngested - totalBurned,
-        goal: calorieProfile?.calorie_goal || null,
-      })
+      // (caloriesDataValue est construit plus bas avant le cache.set)
 
 
       // Pas du jour
@@ -97,37 +115,37 @@ export default function DashboardPage() {
         .not('finished_at', 'is', null)
         .order('finished_at', { ascending: false })
 
+      let streakCount = 0
       if (allSessions?.length) {
         const uniqueDays = [...new Set(
           allSessions.map(s => s.finished_at.split('T')[0])
         )]
-        let count = 0
         let current = new Date()
         for (const day of uniqueDays) {
           const d = new Date(day)
           const diff = Math.floor((current - d) / 1000 / 60 / 60 / 24)
-          if (diff <= 1) { count++; current = d }
+          if (diff <= 1) { streakCount++; current = d }
           else break
         }
-        setStreak(count)
+        setStreak(streakCount)
       }
 
       // Dernier poids
-        const { data: weightEntries } = await supabase
+      const { data: weightEntries } = await supabase
         .from('weight_entries')
         .select('*')
         .eq('user_id', user.id)
         .order('date', { ascending: false })
         .limit(2)
 
-        if (weightEntries?.length > 0) {
+      let weightDataValue = null
+      if (weightEntries?.length > 0) {
         const latest = weightEntries[0]
         const previous = weightEntries[1]
-        const diff = previous
-            ? (latest.weight_kg - previous.weight_kg).toFixed(1)
-            : null
-        setWeightData({ latest, diff })
-        }
+        const diff = previous ? (latest.weight_kg - previous.weight_kg).toFixed(1) : null
+        weightDataValue = { latest, diff }
+        setWeightData(weightDataValue)
+      }
 
       // Résumé hebdomadaire
       const monday = getMondayOfWeek()
@@ -164,16 +182,36 @@ export default function DashboardPage() {
         ? Math.round(weekSteps.reduce((s, d) => s + d.steps, 0) / weekSteps.length)
         : null
 
-      setWeekSummary({
+      const weekSummaryData = {
         sessions: weekSessions?.length || 0,
         avgCals,
         avgSteps,
+      }
+      setWeekSummary(weekSummaryData)
+
+      const caloriesDataValue = {
+        ingested: totalIngested,
+        burned: totalBurned,
+        net: totalIngested - totalBurned,
+        goal: calorieProfile?.calorie_goal || null,
+      }
+      setCaloriesData(caloriesDataValue)
+
+      // Sauvegarder dans le cache pour le mode offline
+      cache.set(CACHE_KEY, {
+        user,
+        steps: stepsData || null,
+        lastSession: sessions?.[0] || null,
+        streak: streakCount,
+        weightData: weightDataValue,
+        caloriesData: caloriesDataValue,
+        weekSummary: weekSummaryData,
       })
 
       setLoading(false)
     }
     fetchAll()
-  }, [])
+  }, [isOnline])
 
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-gray-950">
@@ -192,7 +230,9 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="pt-2">
         <h1 className="text-2xl font-bold text-white">{greeting} {firstName} 👋</h1>
-        <p className="text-gray-400 text-sm mt-1">Voilà où t'en es aujourd'hui</p>
+        <p className="text-gray-400 text-sm mt-1">
+          {fromCache ? 'Données en cache — reconnecte-toi pour actualiser' : 'Voilà où t\'en es aujourd\'hui'}
+        </p>
       </div>
 
       {/* Streak */}

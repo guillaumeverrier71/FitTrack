@@ -5,6 +5,7 @@ import { useSession } from '../../context/SessionContext'
 import WorkoutSession from '../workouts/WorkoutSession'
 import OnboardingModal from '../onboarding/OnboardingModal'
 import { supabase } from '../../lib/supabase'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 
 const navItems = [
   { to: '/', icon: Home, label: 'Accueil' },
@@ -17,6 +18,7 @@ const navItems = [
 
 export default function AppLayout() {
   const { activeSession, sessionVisible, minimizeSession, resumeSession, closeSession } = useSession()
+  const isOnline = useOnlineStatus()
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [onboardingUserId, setOnboardingUserId] = useState(null)
 
@@ -60,7 +62,14 @@ export default function AppLayout() {
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto pb-20">
+      {!isOnline && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-gray-400" />
+          <p className="text-gray-300 text-xs font-medium">Hors-ligne — données en cache</p>
+        </div>
+      )}
+
+      <main className={`flex-1 overflow-y-auto pb-20 ${!isOnline ? 'pt-8' : ''}`}>
         <Outlet />
       </main>
 
