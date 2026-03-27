@@ -161,13 +161,20 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
                     key={exo.id}
                     onClick={() => addExercise(exo)}
                     disabled={!!added}
-                    className={`flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
                       added
                         ? 'bg-indigo-950 text-indigo-400'
                         : 'bg-gray-800 text-white hover:bg-gray-700'
                     }`}
                   >
-                    <span className="text-sm">{exo.name}</span>
+                    {exo.gif_url && (
+                      <img
+                        src={exo.gif_url}
+                        alt={exo.name}
+                        className="w-10 h-10 rounded-lg object-cover bg-gray-700"
+                      />
+                    )}
+                    <span className="text-sm flex-1 text-left">{exo.name}</span>
                     {added ? (
                       <span className="text-xs text-indigo-400">Ajouté ✓</span>
                     ) : (

@@ -11,7 +11,7 @@ export function useWorkouts() {
 
     const { data, error } = await supabase
       .from('workout_templates')
-      .select(`*, template_exercises (*, exercises (name, muscle_group_id))`)
+      .select(`*, template_exercises (*, exercises (name, muscle_group_id, gif_url))`)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 

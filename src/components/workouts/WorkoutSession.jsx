@@ -23,7 +23,6 @@ export default function WorkoutSession({ template, onFinish }) {
     const startSession = async () => {
       const { data: { user } } = await supabase.auth.getUser()
 
-      // Démarre la session
       const { data } = await supabase
         .from('workout_sessions')
         .insert({ user_id: user.id, template_id: template.id })
@@ -31,7 +30,6 @@ export default function WorkoutSession({ template, onFinish }) {
         .single()
       setSessionId(data.id)
 
-      // Récupère la dernière séance avec ce template
       const { data: lastSessions } = await supabase
         .from('workout_sessions')
         .select('id')
@@ -65,7 +63,6 @@ export default function WorkoutSession({ template, onFinish }) {
 
       setLastSession(lastSessionData)
 
-      // Init les séries depuis le template avec les poids de la dernière séance
       const initial = {}
       exercises.forEach(ex => {
         const lastExSets = lastSessionData[ex.exercise_id] || []
@@ -158,12 +155,23 @@ export default function WorkoutSession({ template, onFinish }) {
 
           return (
             <div key={ex.exercise_id} className="flex flex-col gap-3">
+
+              {/* Titre + groupe musculaire */}
               <div className="flex items-center gap-2">
                 <span className="text-indigo-400 text-xs bg-indigo-950 px-2 py-0.5 rounded-full">
                   {ex.exercises?.muscle_groups?.name}
                 </span>
                 <h2 className="text-white font-semibold">{ex.exercises?.name}</h2>
               </div>
+
+              {/* GIF */}
+              {ex.exercises?.gif_url && (
+                <img
+                  src={ex.exercises.gif_url}
+                  alt={ex.exercises.name}
+                  className="w-full max-h-40 object-contain rounded-xl bg-gray-900"
+                />
+              )}
 
               {/* Header colonnes */}
               <div className="grid grid-cols-4 gap-2 px-1">
