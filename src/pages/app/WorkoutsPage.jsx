@@ -5,6 +5,7 @@ import { useSession } from '../../context/SessionContext'
 import TemplateCard from '../../components/workouts/TemplateCard'
 import CreateTemplateModal from '../../components/workouts/CreateTemplateModal'
 import ProgressTab from '../../components/workouts/ProgressTab'
+import HistoryTab from '../../components/workouts/HistoryTab'
 
 export default function WorkoutsPage() {
   const { templates, defaultTemplates, loading, refetch } = useWorkouts()
@@ -21,12 +22,13 @@ export default function WorkoutsPage() {
       <div className="px-4 mb-4">
         <div className="relative flex bg-gray-900 rounded-2xl p-1">
           <div
-            className="absolute top-1 bottom-1 w-1/2 bg-indigo-600 rounded-xl transition-transform duration-300 ease-in-out"
-            style={{ transform: tab === 'seances' ? 'translateX(0)' : 'translateX(100%)' }}
+            className="absolute top-1 bottom-1 w-1/3 bg-indigo-600 rounded-xl transition-transform duration-300 ease-in-out"
+            style={{ transform: tab === 'seances' ? 'translateX(0)' : tab === 'progression' ? 'translateX(100%)' : 'translateX(200%)' }}
           />
           {[
             { key: 'seances', label: 'Séances' },
             { key: 'progression', label: 'Progression' },
+            { key: 'historique', label: 'Historique' },
           ].map(t => (
             <button
               key={t.key}
@@ -93,11 +95,13 @@ export default function WorkoutsPage() {
             </>
           )}
         </div>
-      ) : (
+      ) : tab === 'progression' ? (
         <ProgressTab />
+      ) : (
+        <HistoryTab />
       )}
 
-      {tab === 'seances' && (
+      {tab === 'seances' && templates.length + defaultTemplates.length > 0 && (
         <button
           onClick={() => setShowCreate(true)}
           className="fixed bottom-24 right-8 bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg z-40 flex items-center gap-2 overflow-hidden transition-all duration-300 p-4 rounded-full hover:px-5 group"

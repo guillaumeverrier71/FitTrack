@@ -168,7 +168,7 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col">
+    <div className="h-full bg-gray-950 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-800">
         <h1 className="text-white font-bold text-lg">{template.name}</h1>

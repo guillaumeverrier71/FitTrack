@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 import AuthPage from './pages/auth/AuthPage'
+import ResetPasswordPage from './pages/auth/ResetPasswordPage'
 import AppLayout from './components/layout/AppLayout'
 import WorkoutsPage from './pages/app/WorkoutsPage'
 import StepsPage from './pages/app/StepsPage'
@@ -35,6 +36,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/auth" element={!session ? <AuthPage /> : <Navigate to="/" />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/*" element={session ? <SessionProvider><AppLayout /></SessionProvider> : <Navigate to="/auth" />}>
         <Route index element={<DashboardPage />} />
         <Route path="workouts" element={<WorkoutsPage />} />

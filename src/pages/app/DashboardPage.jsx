@@ -1,11 +1,20 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Footprints, Dumbbell, Flame, Scale, Zap } from 'lucide-react'
+import { Footprints, Dumbbell, Flame, Scale, Zap, CalendarDays } from 'lucide-react'
 
 const CALORIES_PER_STEP = 0.04
 
 function getToday() {
   return new Date().toISOString().split('T')[0]
+}
+
+function getMondayOfWeek() {
+  const today = new Date()
+  const day = today.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  const monday = new Date(today)
+  monday.setDate(today.getDate() + diff)
+  return monday.toISOString().split('T')[0]
 }
 
 function timeAgo(dateStr) {
@@ -24,6 +33,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [weightData, setWeightData] = useState(null)
   const [caloriesData, setCaloriesData] = useState(null)
+  const [weekSummary, setWeekSummary] = useState(null)
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -120,6 +130,47 @@ export default function DashboardPage() {
         setWeightData({ latest, diff })
         }
 
+      // Résumé hebdomadaire
+      const monday = getMondayOfWeek()
+      const { data: weekSessions } = await supabase
+        .from('workout_sessions')
+        .select('id')
+        .eq('user_id', user.id)
+        .not('finished_at', 'is', null)
+        .gte('finished_at', monday)
+
+      const { data: weekMeals } = await supabase
+        .from('meal_entries')
+        .select('calories, date')
+        .eq('user_id', user.id)
+        .gte('date', monday)
+
+      const { data: weekSteps } = await supabase
+        .from('daily_steps')
+        .select('steps')
+        .eq('user_id', user.id)
+        .gte('date', monday)
+
+      // Avg calories: sum / number of distinct days with entries
+      const mealsByDay = (weekMeals || []).reduce((acc, m) => {
+        acc[m.date] = (acc[m.date] || 0) + m.calories
+        return acc
+      }, {})
+      const mealDays = Object.keys(mealsByDay)
+      const avgCals = mealDays.length > 0
+        ? Math.round(Object.values(mealsByDay).reduce((s, c) => s + c, 0) / mealDays.length)
+        : null
+
+      const avgSteps = weekSteps?.length > 0
+        ? Math.round(weekSteps.reduce((s, d) => s + d.steps, 0) / weekSteps.length)
+        : null
+
+      setWeekSummary({
+        sessions: weekSessions?.length || 0,
+        avgCals,
+        avgSteps,
+      })
+
       setLoading(false)
     }
     fetchAll()
@@ -153,6 +204,34 @@ export default function DashboardPage() {
           <div>
             <p className="text-white font-bold text-lg">{streak} jour{streak > 1 ? 's' : ''} de streak 🔥</p>
             <p className="text-orange-100 text-sm">Continue comme ça !</p>
+          </div>
+        </div>
+      )}
+
+      {/* Résumé semaine */}
+      {weekSummary && (
+        <div className="bg-gray-900 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <CalendarDays size={18} className="text-indigo-400" />
+            <span className="text-gray-400 text-sm">Cette semaine</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-gray-800 rounded-xl p-3 text-center">
+              <p className="text-white font-bold text-2xl">{weekSummary.sessions}</p>
+              <p className="text-gray-500 text-xs mt-1">séance{weekSummary.sessions > 1 ? 's' : ''}</p>
+            </div>
+            <div className="bg-gray-800 rounded-xl p-3 text-center">
+              <p className="text-white font-bold text-2xl">
+                {weekSummary.avgCals !== null ? weekSummary.avgCals : '—'}
+              </p>
+              <p className="text-gray-500 text-xs mt-1">kcal/j moy.</p>
+            </div>
+            <div className="bg-gray-800 rounded-xl p-3 text-center">
+              <p className="text-white font-bold text-2xl">
+                {weekSummary.avgSteps !== null ? weekSummary.avgSteps.toLocaleString('fr-FR') : '—'}
+              </p>
+              <p className="text-gray-500 text-xs mt-1">pas/j moy.</p>
+            </div>
           </div>
         </div>
       )}

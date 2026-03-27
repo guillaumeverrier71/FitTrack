@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Plus, Trash2, Flame, Target, X, Settings2 } from 'lucide-react'
+import { Plus, Trash2, Flame, Target, X, Settings2, PenLine } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import FoodSearch from '../../components/nutrition/FoodSearch'
 
@@ -51,6 +51,14 @@ export default function NutritionPage() {
   const [actName, setActName] = useState('')
   const [actCals, setActCals] = useState('')
   const [actDuration, setActDuration] = useState('')
+
+  const [showManualForm, setShowManualForm] = useState(false)
+  const [manualCat, setManualCat] = useState('déjeuner')
+  const [manName, setManName] = useState('')
+  const [manCals, setManCals] = useState('')
+  const [manProteins, setManProteins] = useState('')
+  const [manCarbs, setManCarbs] = useState('')
+  const [manFats, setManFats] = useState('')
   const [profAge, setProfAge] = useState('')
   const [profGender, setProfGender] = useState('homme')
   const [profActivity, setProfActivity] = useState('modere')
@@ -162,6 +170,24 @@ export default function NutritionPage() {
     fetchData()
   }
 
+  const handleAddManual = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('meal_entries').insert({
+      user_id: user.id,
+      date: getToday(),
+      name: manName.trim() || 'Saisie manuelle',
+      calories: parseInt(manCals) || 0,
+      proteins: parseFloat(manProteins) || 0,
+      carbs: parseFloat(manCarbs) || 0,
+      fats: parseFloat(manFats) || 0,
+      quantity_g: 100,
+      category: manualCat,
+    })
+    setManName(''); setManCals(''); setManProteins(''); setManCarbs(''); setManFats('')
+    setShowManualForm(false)
+    fetchData()
+  }
+
   const handleDeleteMeal = async (id) => {
     await supabase.from('meal_entries').delete().eq('id', id)
     fetchData()
@@ -200,10 +226,10 @@ export default function NutritionPage() {
         <h1 className="text-2xl font-bold text-white">Calories</h1>
         <button
           onClick={() => setShowProfileForm(true)}
-          className="flex items-center gap-2 bg-gray-900 border border-gray-800 hover:border-indigo-500/50 text-gray-400 hover:text-white px-3 py-2 rounded-xl transition-all"
+          className="flex items-center gap-2 bg-gray-900 border border-gray-800 hover:border-indigo-500/50 text-gray-400 hover:text-white px-4 py-2.5 rounded-xl transition-all"
         >
-          <Settings2 size={14} className="text-indigo-400 shrink-0" />
-          <span className="text-xs font-medium">
+          <Settings2 size={15} className="text-indigo-400 shrink-0" />
+          <span className="text-sm font-medium">
             {calorieGoal ? `${calorieGoal} kcal` : 'Objectif'}
           </span>
         </button>
@@ -267,8 +293,16 @@ export default function NutritionPage() {
               <div className="flex items-center gap-2">
                 {total > 0 && <span className="text-gray-400 text-sm">{total} kcal</span>}
                 <button
+                  onClick={() => { setManualCat(cat); setShowManualForm(true) }}
+                  className="bg-gray-700 hover:bg-gray-600 text-gray-300 p-1 rounded-lg transition-colors"
+                  title="Saisie manuelle"
+                >
+                  <PenLine size={16} />
+                </button>
+                <button
                   onClick={() => { setActiveMealCat(cat); setShowMealForm(true) }}
                   className="bg-indigo-600 hover:bg-indigo-500 text-white p-1 rounded-lg transition-colors"
+                  title="Rechercher un aliment"
                 >
                   <Plus size={16} />
                 </button>
@@ -364,6 +398,82 @@ export default function NutritionPage() {
           onAdd={handleAddMeal}
           onClose={() => setShowMealForm(false)}
         />
+      )}
+
+      {/* Modal saisie manuelle */}
+      {showManualForm && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-end" onClick={() => setShowManualForm(false)}>
+          <div className="bg-gray-900 w-full rounded-t-3xl p-6 flex flex-col gap-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-white font-semibold">Saisie manuelle</h2>
+                <p className="text-gray-500 text-xs capitalize">{manualCat}</p>
+              </div>
+              <button onClick={() => setShowManualForm(false)}><X size={22} className="text-gray-400" /></button>
+            </div>
+
+            <input
+              type="text"
+              placeholder="Nom (ex: Riz blanc)"
+              value={manName}
+              onChange={e => setManName(e.target.value)}
+              className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
+              autoFocus
+            />
+
+            <div>
+              <label className="text-gray-400 text-xs mb-1 block">Calories (kcal) *</label>
+              <input
+                type="number"
+                placeholder="ex: 350"
+                value={manCals}
+                onChange={e => setManCals(e.target.value)}
+                className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-blue-400 text-xs mb-1 block">Protéines (g)</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={manProteins}
+                  onChange={e => setManProteins(e.target.value)}
+                  className="bg-gray-800 text-white rounded-xl px-3 py-3 outline-none focus:ring-2 focus:ring-blue-500 w-full text-center"
+                />
+              </div>
+              <div>
+                <label className="text-yellow-400 text-xs mb-1 block">Glucides (g)</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={manCarbs}
+                  onChange={e => setManCarbs(e.target.value)}
+                  className="bg-gray-800 text-white rounded-xl px-3 py-3 outline-none focus:ring-2 focus:ring-yellow-500 w-full text-center"
+                />
+              </div>
+              <div>
+                <label className="text-red-400 text-xs mb-1 block">Lipides (g)</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={manFats}
+                  onChange={e => setManFats(e.target.value)}
+                  className="bg-gray-800 text-white rounded-xl px-3 py-3 outline-none focus:ring-2 focus:ring-red-500 w-full text-center"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleAddManual}
+              disabled={!manCals}
+              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
+            >
+              Ajouter
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Modal activité */}

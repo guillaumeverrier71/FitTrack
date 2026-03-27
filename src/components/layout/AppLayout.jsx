@@ -1,7 +1,10 @@
 import { Outlet, NavLink } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import { Dumbbell, Footprints, Flame, Scale, Home, User } from 'lucide-react'
 import { useSession } from '../../context/SessionContext'
 import WorkoutSession from '../workouts/WorkoutSession'
+import OnboardingModal from '../onboarding/OnboardingModal'
+import { supabase } from '../../lib/supabase'
 
 const navItems = [
   { to: '/', icon: Home, label: 'Accueil' },
@@ -14,9 +17,38 @@ const navItems = [
 
 export default function AppLayout() {
   const { activeSession, sessionVisible, minimizeSession, resumeSession, closeSession } = useSession()
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [onboardingUserId, setOnboardingUserId] = useState(null)
+
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      if (localStorage.getItem(`onboarding_done_${user.id}`)) return
+      const { data: profile } = await supabase
+        .from('user_profile')
+        .select('height_cm')
+        .eq('user_id', user.id)
+        .single()
+      if (!profile?.height_cm) {
+        setOnboardingUserId(user.id)
+        setShowOnboarding(true)
+      } else {
+        localStorage.setItem(`onboarding_done_${user.id}`, '1')
+      }
+    }
+    checkOnboarding()
+  }, [])
 
   return (
     <div className="h-screen flex flex-col bg-gray-950">
+      {showOnboarding && onboardingUserId && (
+        <OnboardingModal
+          userId={onboardingUserId}
+          onDone={() => setShowOnboarding(false)}
+        />
+      )}
+
       {/* Overlay séance — monté en mémoire, masqué si non visible */}
       {activeSession && (
         <div className={sessionVisible ? 'fixed inset-0 z-50' : 'hidden'}>
