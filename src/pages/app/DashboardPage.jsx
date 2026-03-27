@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { cache } from '../../lib/cache'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
+import { useToast } from '../../context/ToastContext'
+import { handleSupabaseError } from '../../lib/handleError'
 import { Footprints, Dumbbell, Flame, Scale, Zap, CalendarDays } from 'lucide-react'
 
 
@@ -29,6 +31,7 @@ function timeAgo(dateStr) {
 const CACHE_KEY = 'dashboard'
 
 export default function DashboardPage() {
+  const toast = useToast()
   const isOnline = useOnlineStatus()
   const [user, setUser] = useState(null)
   const [steps, setSteps] = useState(null)
@@ -59,7 +62,9 @@ export default function DashboardPage() {
     }
 
     const fetchAll = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError) { await handleSupabaseError(authError, toast); setLoading(false); return }
       setUser(user)
 
 
@@ -209,6 +214,10 @@ export default function DashboardPage() {
       })
 
       setLoading(false)
+      } catch (err) {
+        await handleSupabaseError(err, toast, 'Erreur lors du chargement du tableau de bord.')
+        setLoading(false)
+      }
     }
     fetchAll()
   }, [isOnline])

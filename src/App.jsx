@@ -11,6 +11,8 @@ import WeightPage from './pages/app/WeightPage'
 import ProfilePage from './pages/app/ProfilePage'
 import NutritionPage from './pages/app/NutritionPage'
 import { SessionProvider } from './context/SessionContext'
+import { ToastProvider } from './context/ToastContext'
+import ErrorBoundary from './components/ui/ErrorBoundary'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -34,17 +36,21 @@ export default function App() {
   )
 
   return (
-    <Routes>
-      <Route path="/auth" element={!session ? <AuthPage /> : <Navigate to="/" />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/*" element={session ? <SessionProvider><AppLayout /></SessionProvider> : <Navigate to="/auth" />}>
-        <Route index element={<DashboardPage />} />
-        <Route path="workouts" element={<WorkoutsPage />} />
-        <Route path="steps" element={<StepsPage />} />
-        <Route path="weight" element={<WeightPage />} />
-        <Route path="profile" element={<ProfilePage />} />
-        <Route path="nutrition" element={<NutritionPage />} />
-      </Route>
-    </Routes>
+    <ErrorBoundary>
+      <ToastProvider>
+        <Routes>
+          <Route path="/auth" element={!session ? <AuthPage /> : <Navigate to="/" />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/*" element={session ? <SessionProvider><AppLayout /></SessionProvider> : <Navigate to="/auth" />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="workouts" element={<WorkoutsPage />} />
+            <Route path="steps" element={<StepsPage />} />
+            <Route path="weight" element={<WeightPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="nutrition" element={<NutritionPage />} />
+          </Route>
+        </Routes>
+      </ToastProvider>
+    </ErrorBoundary>
   )
 }

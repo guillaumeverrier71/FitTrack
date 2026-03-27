@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { X, Plus, Check, Pause, Play } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import ConfirmModal from '../ui/ConfirmModal'
+import { useToast } from '../../context/ToastContext'
+import { handleSupabaseError } from '../../lib/handleError'
 
 function getSuggestion(lastWeight, lastReps) {
   if (!lastWeight || !lastReps) return null
@@ -21,6 +23,7 @@ function formatTime(seconds) {
 }
 
 export default function WorkoutSession({ template, onMinimize, onDone }) {
+  const toast = useToast()
   const [sessionId, setSessionId] = useState(null)
   const [sets, setSets] = useState({})
   const [lastSession, setLastSession] = useState({})
@@ -147,14 +150,26 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
     })
 
     if (allSets.length > 0) {
-      await supabase.from('session_sets').insert(allSets)
+      const { error: setsError } = await supabase.from('session_sets').insert(allSets)
+      if (setsError) {
+        await handleSupabaseError(setsError, toast, 'Erreur lors de la sauvegarde des séries.')
+        setSaving(false)
+        return
+      }
     }
 
-    await supabase
+    const { error: sessionError } = await supabase
       .from('workout_sessions')
       .update({ finished_at: new Date().toISOString() })
       .eq('id', sessionId)
 
+    if (sessionError) {
+      await handleSupabaseError(sessionError, toast, 'Erreur lors de la finalisation de la séance.')
+      setSaving(false)
+      return
+    }
+
+    toast.success('Séance enregistrée !')
     setSaving(false)
     onDone()
   }
