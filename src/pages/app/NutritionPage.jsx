@@ -3,6 +3,8 @@ import { supabase } from '../../lib/supabase'
 import { Plus, Trash2, Flame, Target, X, Settings2, PenLine } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import FoodSearch from '../../components/nutrition/FoodSearch'
+import { useToast } from '../../context/ToastContext'
+import { handleSupabaseError } from '../../lib/handleError'
 
 const CATEGORIES = ['petit-déj', 'déjeuner', 'dîner', 'snack']
 const ACTIVITY_LEVELS = {
@@ -37,6 +39,7 @@ function calculateTDEE(profile) {
 }
 
 export default function NutritionPage() {
+  const toast = useToast()
   const [meals, setMeals] = useState([])
   const [activities, setActivities] = useState([])
   const [profile, setProfile] = useState(null)
@@ -65,137 +68,169 @@ export default function NutritionPage() {
   const [profGoalCals, setProfGoalCals] = useState('')
 
   const fetchData = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setLoading(false); return }
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setLoading(false); return }
 
-    const today = getToday()
+      const today = getToday()
 
-    const [
-      { data: mealsData },
-      { data: activitiesData },
-      { data: profileData },
-      { data: weightData },
-    ] = await Promise.all([
-      supabase.from('meal_entries').select('*').eq('user_id', user.id).eq('date', today).order('created_at'),
-      supabase.from('activity_entries').select('*').eq('user_id', user.id).eq('date', today).order('created_at'),
-      supabase.from('user_profile').select('*').eq('user_id', user.id).single(),
-      supabase.from('weight_entries').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(1),
-    ])
+      const [
+        { data: mealsData },
+        { data: activitiesData },
+        { data: profileData },
+        { data: weightData },
+      ] = await Promise.all([
+        supabase.from('meal_entries').select('*').eq('user_id', user.id).eq('date', today).order('created_at'),
+        supabase.from('activity_entries').select('*').eq('user_id', user.id).eq('date', today).order('created_at'),
+        supabase.from('user_profile').select('*').eq('user_id', user.id).single(),
+        supabase.from('weight_entries').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(1),
+      ])
 
-    setMeals(mealsData || [])
-    setActivities(activitiesData || [])
-    setProfile(profileData)
-    setCurrentWeight(weightData?.[0]?.weight_kg || null)
-    setProfAge(profileData?.age?.toString() || '')
-    setProfGender(profileData?.gender || 'homme')
-    setProfActivity(profileData?.activity_level || 'modere')
-    setProfGoalCals(profileData?.calorie_goal?.toString() || '')
+      setMeals(mealsData || [])
+      setActivities(activitiesData || [])
+      setProfile(profileData)
+      setCurrentWeight(weightData?.[0]?.weight_kg || null)
+      setProfAge(profileData?.age?.toString() || '')
+      setProfGender(profileData?.gender || 'homme')
+      setProfActivity(profileData?.activity_level || 'modere')
+      setProfGoalCals(profileData?.calorie_goal?.toString() || '')
 
-    const dates = []
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date()
-      d.setDate(d.getDate() - i)
-      dates.push(d.toISOString().split('T')[0])
+      const dates = []
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date()
+        d.setDate(d.getDate() - i)
+        dates.push(d.toISOString().split('T')[0])
+      }
+
+      const { data: weekMeals } = await supabase.from('meal_entries').select('date, calories').eq('user_id', user.id).in('date', dates)
+      const { data: weekActs } = await supabase.from('activity_entries').select('date, calories_burned').eq('user_id', user.id).in('date', dates)
+
+      const mapped = dates.map(date => ({
+        date,
+        label: formatDate(date),
+        ingested: (weekMeals || []).filter(m => m.date === date).reduce((s, m) => s + m.calories, 0),
+        burned: (weekActs || []).filter(a => a.date === date).reduce((s, a) => s + a.calories_burned, 0),
+        isToday: date === today,
+      }))
+
+      setWeekData(mapped)
+      setLoading(false)
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur de chargement.')
     }
-
-    const { data: weekMeals } = await supabase.from('meal_entries').select('date, calories').eq('user_id', user.id).in('date', dates)
-    const { data: weekActs } = await supabase.from('activity_entries').select('date, calories_burned').eq('user_id', user.id).in('date', dates)
-
-    const mapped = dates.map(date => ({
-      date,
-      label: formatDate(date),
-      ingested: (weekMeals || []).filter(m => m.date === date).reduce((s, m) => s + m.calories, 0),
-      burned: (weekActs || []).filter(a => a.date === date).reduce((s, a) => s + a.calories_burned, 0),
-      isToday: date === today,
-    }))
-
-    setWeekData(mapped)
-    setLoading(false)
   }
 
   useEffect(() => { fetchData() }, [])
 
   const handleAddMeal = async (foodData) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('meal_entries').insert({
-      user_id: user.id,
-      date: getToday(),
-      name: foodData.name,
-      calories: foodData.calories,
-      proteins: foodData.proteins || 0,
-      carbs: foodData.carbs || 0,
-      fats: foodData.fats || 0,
-      quantity_g: foodData.quantity_g || 100,
-      food_id: foodData.food_id || null,
-      category: foodData.category,
-    })
-    setShowMealForm(false)
-    fetchData()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('meal_entries').insert({
+        user_id: user.id,
+        date: getToday(),
+        name: foodData.name,
+        calories: foodData.calories,
+        proteins: foodData.proteins || 0,
+        carbs: foodData.carbs || 0,
+        fats: foodData.fats || 0,
+        quantity_g: foodData.quantity_g || 100,
+        food_id: foodData.food_id || null,
+        category: foodData.category,
+      })
+      setShowMealForm(false)
+      toast.success('Aliment ajouté !')
+      fetchData()
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur lors de l\'ajout de l\'aliment.')
+    }
   }
 
   const handleAddActivity = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('activity_entries').insert({
-      user_id: user.id,
-      date: getToday(),
-      name: actName.trim(),
-      calories_burned: parseInt(actCals),
-      duration_minutes: parseInt(actDuration) || null,
-    })
-    setActName(''); setActCals(''); setActDuration('')
-    setShowActivityForm(false)
-    fetchData()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('activity_entries').insert({
+        user_id: user.id,
+        date: getToday(),
+        name: actName.trim(),
+        calories_burned: parseInt(actCals),
+        duration_minutes: parseInt(actDuration) || null,
+      })
+      setActName(''); setActCals(''); setActDuration('')
+      setShowActivityForm(false)
+      toast.success('Activité ajoutée !')
+      fetchData()
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur lors de l\'ajout de l\'activité.')
+    }
   }
 
   const handleSaveProfile = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    const tdee = calculateTDEE({
-      weight_goal_kg: profile?.weight_goal_kg,
-      height_cm: profile?.height_cm,
-      age: parseInt(profAge),
-      gender: profGender,
-      activity_level: profActivity,
-      current_weight: currentWeight,
-    })
-    await supabase.from('user_profile').upsert({
-      user_id: user.id,
-      height_cm: profile?.height_cm,
-      weight_goal_kg: profile?.weight_goal_kg,
-      age: parseInt(profAge) || null,
-      gender: profGender,
-      activity_level: profActivity,
-      calorie_goal: profGoalCals ? parseInt(profGoalCals) : tdee,
-    }, { onConflict: 'user_id' })
-    setShowProfileForm(false)
-    fetchData()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const tdee = calculateTDEE({
+        weight_goal_kg: profile?.weight_goal_kg,
+        height_cm: profile?.height_cm,
+        age: parseInt(profAge),
+        gender: profGender,
+        activity_level: profActivity,
+        current_weight: currentWeight,
+      })
+      await supabase.from('user_profile').upsert({
+        user_id: user.id,
+        height_cm: profile?.height_cm,
+        weight_goal_kg: profile?.weight_goal_kg,
+        age: parseInt(profAge) || null,
+        gender: profGender,
+        activity_level: profActivity,
+        calorie_goal: profGoalCals ? parseInt(profGoalCals) : tdee,
+      }, { onConflict: 'user_id' })
+      setShowProfileForm(false)
+      toast.success('Objectif mis à jour !')
+      fetchData()
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur lors de la mise à jour de l\'objectif.')
+    }
   }
 
   const handleAddManual = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('meal_entries').insert({
-      user_id: user.id,
-      date: getToday(),
-      name: manName.trim() || 'Saisie manuelle',
-      calories: parseInt(manCals) || 0,
-      proteins: parseFloat(manProteins) || 0,
-      carbs: parseFloat(manCarbs) || 0,
-      fats: parseFloat(manFats) || 0,
-      quantity_g: 100,
-      category: manualCat,
-    })
-    setManName(''); setManCals(''); setManProteins(''); setManCarbs(''); setManFats('')
-    setShowManualForm(false)
-    fetchData()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('meal_entries').insert({
+        user_id: user.id,
+        date: getToday(),
+        name: manName.trim() || 'Saisie manuelle',
+        calories: parseInt(manCals) || 0,
+        proteins: parseFloat(manProteins) || 0,
+        carbs: parseFloat(manCarbs) || 0,
+        fats: parseFloat(manFats) || 0,
+        quantity_g: 100,
+        category: manualCat,
+      })
+      setManName(''); setManCals(''); setManProteins(''); setManCarbs(''); setManFats('')
+      setShowManualForm(false)
+      toast.success('Ajouté !')
+      fetchData()
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur lors de l\'ajout.')
+    }
   }
 
   const handleDeleteMeal = async (id) => {
-    await supabase.from('meal_entries').delete().eq('id', id)
-    fetchData()
+    try {
+      await supabase.from('meal_entries').delete().eq('id', id)
+      fetchData()
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur lors de la suppression.')
+    }
   }
 
   const handleDeleteActivity = async (id) => {
-    await supabase.from('activity_entries').delete().eq('id', id)
-    fetchData()
+    try {
+      await supabase.from('activity_entries').delete().eq('id', id)
+      fetchData()
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur lors de la suppression.')
+    }
   }
 
   if (loading) return (

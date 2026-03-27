@@ -3,8 +3,11 @@ import { supabase } from '../../lib/supabase'
 import { User, Mail, Ruler, Target, LogOut, Pencil, Check, Camera, Flame } from 'lucide-react'
 import Medals from '../../components/profile/Medals'
 import ConfirmModal from '../../components/ui/ConfirmModal'
+import { useToast } from '../../context/ToastContext'
+import { handleSupabaseError } from '../../lib/handleError'
 
 export default function ProfilePage() {
+  const toast = useToast()
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [editing, setEditing] = useState(false)
@@ -23,72 +26,76 @@ export default function ProfilePage() {
   const fileInputRef = useRef(null)
 
   const fetchData = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    setUser(user)
-    const fullName = user?.user_metadata?.full_name || ''
-    const parts = fullName.trim().split(' ')
-    setInputFirstName(parts[0] || '')
-    setInputLastName(parts.slice(1).join(' ') || '')
-    setAvatarUrl(user?.user_metadata?.avatar_url || null)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      setUser(user)
+      const fullName = user?.user_metadata?.full_name || ''
+      const parts = fullName.trim().split(' ')
+      setInputFirstName(parts[0] || '')
+      setInputLastName(parts.slice(1).join(' ') || '')
+      setAvatarUrl(user?.user_metadata?.avatar_url || null)
 
-    const { data: profileData } = await supabase
-      .from('user_profile')
-      .select('*')
-      .eq('user_id', user.id)
-      .single()
+      const { data: profileData } = await supabase
+        .from('user_profile')
+        .select('*')
+        .eq('user_id', user.id)
+        .single()
 
-    setProfile(profileData)
-    setInputHeight(profileData?.height_cm?.toString() || '')
-    setInputGoal(profileData?.weight_goal_kg?.toString() || '')
-    setInputAge(profileData?.age?.toString() || '')
-    setInputGender(profileData?.gender || '')
+      setProfile(profileData)
+      setInputHeight(profileData?.height_cm?.toString() || '')
+      setInputGoal(profileData?.weight_goal_kg?.toString() || '')
+      setInputAge(profileData?.age?.toString() || '')
+      setInputGender(profileData?.gender || '')
 
-    // Poids actuel
-    const { data: weightEntries } = await supabase
-      .from('weight_entries')
-      .select('weight_kg')
-      .eq('user_id', user.id)
-      .order('date', { ascending: false })
-      .limit(1)
-    setCurrentWeight(weightEntries?.[0]?.weight_kg || null)
+      // Poids actuel
+      const { data: weightEntries } = await supabase
+        .from('weight_entries')
+        .select('weight_kg')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+        .limit(1)
+      setCurrentWeight(weightEntries?.[0]?.weight_kg || null)
 
-    // Stats rapides
-    const { count: sessionsCount } = await supabase
-      .from('workout_sessions')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .not('finished_at', 'is', null)
+      // Stats rapides
+      const { count: sessionsCount } = await supabase
+        .from('workout_sessions')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .not('finished_at', 'is', null)
 
-    const { data: allSessions } = await supabase
-      .from('workout_sessions')
-      .select('finished_at')
-      .eq('user_id', user.id)
-      .not('finished_at', 'is', null)
-      .order('finished_at', { ascending: false })
+      const { data: allSessions } = await supabase
+        .from('workout_sessions')
+        .select('finished_at')
+        .eq('user_id', user.id)
+        .not('finished_at', 'is', null)
+        .order('finished_at', { ascending: false })
 
-    let streak = 0
-    if (allSessions?.length) {
-      const uniqueDays = [...new Set(allSessions.map(s => s.finished_at.split('T')[0]))]
-      let current = new Date()
-      for (const day of uniqueDays) {
-        const d = new Date(day)
-        const diff = Math.floor((current - d) / 1000 / 60 / 60 / 24)
-        if (diff <= 1) { streak++; current = d }
-        else break
+      let streak = 0
+      if (allSessions?.length) {
+        const uniqueDays = [...new Set(allSessions.map(s => s.finished_at.split('T')[0]))]
+        let current = new Date()
+        for (const day of uniqueDays) {
+          const d = new Date(day)
+          const diff = Math.floor((current - d) / 1000 / 60 / 60 / 24)
+          if (diff <= 1) { streak++; current = d }
+          else break
+        }
       }
+
+      const { data: setsData } = await supabase
+        .from('session_sets')
+        .select('weight_kg, reps, workout_sessions!inner(user_id)')
+        .eq('workout_sessions.user_id', user.id)
+
+      const totalVolume = setsData
+        ? Math.round(setsData.reduce((s, set) => s + (set.weight_kg * set.reps), 0))
+        : 0
+
+      setStats({ sessions: sessionsCount || 0, streak, totalVolume })
+      setLoading(false)
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur de chargement.')
     }
-
-    const { data: setsData } = await supabase
-      .from('session_sets')
-      .select('weight_kg, reps, workout_sessions!inner(user_id)')
-      .eq('workout_sessions.user_id', user.id)
-
-    const totalVolume = setsData
-      ? Math.round(setsData.reduce((s, set) => s + (set.weight_kg * set.reps), 0))
-      : 0
-
-    setStats({ sessions: sessionsCount || 0, streak, totalVolume })
-    setLoading(false)
   }
 
   useEffect(() => { fetchData() }, [])
@@ -97,43 +104,58 @@ export default function ProfilePage() {
     const file = e.target.files?.[0]
     if (!file) return
     setUploadingPhoto(true)
+    try {
+      const ext = file.name.split('.').pop()
+      const path = `${user.id}/avatar.${ext}`
 
-    const ext = file.name.split('.').pop()
-    const path = `${user.id}/avatar.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, { upsert: true })
 
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(path, file, { upsert: true })
-
-    if (!uploadError) {
-      const { data } = supabase.storage.from('avatars').getPublicUrl(path)
-      const url = `${data.publicUrl}?t=${Date.now()}`
-      await supabase.auth.updateUser({ data: { avatar_url: url } })
-      setAvatarUrl(url)
+      if (!uploadError) {
+        const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+        const url = `${data.publicUrl}?t=${Date.now()}`
+        await supabase.auth.updateUser({ data: { avatar_url: url } })
+        setAvatarUrl(url)
+        toast.success('Photo mise à jour !')
+      }
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur lors du téléchargement de la photo.')
+    } finally {
+      setUploadingPhoto(false)
     }
-    setUploadingPhoto(false)
   }
 
   const handleSave = async () => {
     setSaving(true)
-    const fullName = [inputFirstName.trim(), inputLastName.trim()].filter(Boolean).join(' ')
-    await supabase.auth.updateUser({ data: { full_name: fullName } })
-    await supabase.from('user_profile').upsert({
-      user_id: user.id,
-      height_cm: parseFloat(inputHeight) || null,
-      weight_goal_kg: parseFloat(inputGoal) || null,
-      age: parseInt(inputAge) || null,
-      gender: inputGender || null,
-    }, { onConflict: 'user_id' })
-    setSaving(false)
-    setEditing(false)
-    fetchData()
+    try {
+      const fullName = [inputFirstName.trim(), inputLastName.trim()].filter(Boolean).join(' ')
+      await supabase.auth.updateUser({ data: { full_name: fullName } })
+      await supabase.from('user_profile').upsert({
+        user_id: user.id,
+        height_cm: parseFloat(inputHeight) || null,
+        weight_goal_kg: parseFloat(inputGoal) || null,
+        age: parseInt(inputAge) || null,
+        gender: inputGender || null,
+      }, { onConflict: 'user_id' })
+      setSaving(false)
+      setEditing(false)
+      toast.success('Profil sauvegardé !')
+      fetchData()
+    } catch (err) {
+      setSaving(false)
+      await handleSupabaseError(err, toast, 'Erreur lors de la sauvegarde.')
+    }
   }
 
   const [confirmLogout, setConfirmLogout] = useState(false)
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    try {
+      await supabase.auth.signOut()
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur lors de la déconnexion.')
+    }
   }
 
   if (loading) return (

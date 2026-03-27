@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { Footprints, Flame, Target, Pencil, Check, X } from 'lucide-react'
+import { useToast } from '../../context/ToastContext'
+import { handleSupabaseError } from '../../lib/handleError'
 
 const CALORIES_PER_STEP = 0.04
 
@@ -80,6 +82,7 @@ function formatDayLabel(dateStr) {
 }
 
 export default function StepsPage() {
+  const toast = useToast()
   const [period, setPeriod] = useState('week')
   const [chartData, setChartData] = useState([])
   const [today, setToday] = useState(null)
@@ -97,52 +100,56 @@ export default function StepsPage() {
   const [saving, setSaving] = useState(false)
 
   const fetchData = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    const dates = getDates(period)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const dates = getDates(period)
 
-    const { data } = await supabase
-      .from('daily_steps')
-      .select('*')
-      .eq('user_id', user.id)
-      .in('date', dates)
+      const { data } = await supabase
+        .from('daily_steps')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('date', dates)
 
-    const mapped = period === 'weeks'
-      ? groupByWeeks(dates, data, 10000)
-      : dates.map(date => {
-          const entry = data?.find(d => d.date === date)
-          return {
-            date,
-            label: formatLabel(date, period),
-            steps: entry?.steps || 0,
-            goal: entry?.goal || 10000,
-            isToday: isToday(date),
-          }
-        })
+      const mapped = period === 'weeks'
+        ? groupByWeeks(dates, data, 10000)
+        : dates.map(date => {
+            const entry = data?.find(d => d.date === date)
+            return {
+              date,
+              label: formatLabel(date, period),
+              steps: entry?.steps || 0,
+              goal: entry?.goal || 10000,
+              isToday: isToday(date),
+            }
+          })
 
-    setChartData(mapped)
+      setChartData(mapped)
 
-    // Liste des jours toujours sur 30j, indépendante de la période du graphique
-    const listDates = getDates('month')
-    const listData = period === 'month' ? data : (await supabase
-      .from('daily_steps').select('*').eq('user_id', user.id).in('date', listDates)).data
-    setDailyList(listDates.map(date => {
-      const entry = listData?.find(d => d.date === date)
-      return { date, steps: entry?.steps || 0, goal: entry?.goal || 10000, isToday: isToday(date) }
-    }))
+      // Liste des jours toujours sur 30j, indépendante de la période du graphique
+      const listDates = getDates('month')
+      const listData = period === 'month' ? data : (await supabase
+        .from('daily_steps').select('*').eq('user_id', user.id).in('date', listDates)).data
+      setDailyList(listDates.map(date => {
+        const entry = listData?.find(d => d.date === date)
+        return { date, steps: entry?.steps || 0, goal: entry?.goal || 10000, isToday: isToday(date) }
+      }))
 
-    // Toujours récupérer les pas réels d'aujourd'hui, peu importe la période
-    const todayRaw = data?.find(d => d.date === getToday())
-    const todayEntry = {
-      date: getToday(),
-      steps: todayRaw?.steps || 0,
-      goal: todayRaw?.goal || 10000,
-      isToday: true,
+      // Toujours récupérer les pas réels d'aujourd'hui, peu importe la période
+      const todayRaw = data?.find(d => d.date === getToday())
+      const todayEntry = {
+        date: getToday(),
+        steps: todayRaw?.steps || 0,
+        goal: todayRaw?.goal || 10000,
+        isToday: true,
+      }
+      setToday(todayEntry)
+      setInputSteps(todayEntry.steps.toString())
+      setInputGoal(todayEntry.goal.toString())
+      setLoading(false)
+      setChartLoading(false)
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur de chargement.')
     }
-    setToday(todayEntry)
-    setInputSteps(todayEntry.steps.toString())
-    setInputGoal(todayEntry.goal.toString())
-    setLoading(false)
-    setChartLoading(false)
   }
 
   useEffect(() => {
@@ -151,15 +158,20 @@ export default function StepsPage() {
   }, [period])
 
   const handleSaveToday = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('daily_steps').upsert({
-      user_id: user.id,
-      date: getToday(),
-      steps: parseInt(inputSteps) || 0,
-      goal: parseInt(inputGoal) || 10000,
-    }, { onConflict: 'user_id,date' })
-    setEditing(false)
-    fetchData()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('daily_steps').upsert({
+        user_id: user.id,
+        date: getToday(),
+        steps: parseInt(inputSteps) || 0,
+        goal: parseInt(inputGoal) || 10000,
+      }, { onConflict: 'user_id,date' })
+      setEditing(false)
+      toast.success('Pas mis à jour !')
+      fetchData()
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur lors de l\'enregistrement des pas.')
+    }
   }
 
   const openDay = (entry) => {
@@ -170,16 +182,22 @@ export default function StepsPage() {
 
   const handleSaveDay = async () => {
     setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('daily_steps').upsert({
-      user_id: user.id,
-      date: openDate,
-      steps: parseInt(editInputSteps) || 0,
-      goal: parseInt(editInputGoal) || 10000,
-    }, { onConflict: 'user_id,date' })
-    setSaving(false)
-    setOpenDate(null)
-    fetchData()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('daily_steps').upsert({
+        user_id: user.id,
+        date: openDate,
+        steps: parseInt(editInputSteps) || 0,
+        goal: parseInt(editInputGoal) || 10000,
+      }, { onConflict: 'user_id,date' })
+      setSaving(false)
+      setOpenDate(null)
+      toast.success('Pas mis à jour !')
+      fetchData()
+    } catch (err) {
+      setSaving(false)
+      await handleSupabaseError(err, toast, 'Erreur lors de l\'enregistrement des pas.')
+    }
   }
 
   if (loading) return (

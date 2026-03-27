@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { Scale, Target, Pencil, TrendingDown, TrendingUp, Minus } from 'lucide-react'
+import { useToast } from '../../context/ToastContext'
+import { handleSupabaseError } from '../../lib/handleError'
 
 function getToday() {
   return new Date().toISOString().split('T')[0]
@@ -27,6 +29,7 @@ function getBMICategory(bmi) {
 }
 
 export default function WeightPage() {
+  const toast = useToast()
   const [entries, setEntries] = useState([])
   const [profile, setProfile] = useState(null)
   const [period, setPeriod] = useState(30)
@@ -39,59 +42,73 @@ export default function WeightPage() {
   const [loading, setLoading] = useState(true)
 
   const fetchData = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
 
-    const since = new Date()
-    since.setDate(since.getDate() - period)
-    const sinceStr = since.toISOString().split('T')[0]
+      const since = new Date()
+      since.setDate(since.getDate() - period)
+      const sinceStr = since.toISOString().split('T')[0]
 
-    const { data: weightData } = await supabase
-      .from('weight_entries')
-      .select('*')
-      .eq('user_id', user.id)
-      .gte('date', sinceStr)
-      .order('date', { ascending: true })
+      const { data: weightData } = await supabase
+        .from('weight_entries')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('date', sinceStr)
+        .order('date', { ascending: true })
 
-    const { data: profileData } = await supabase
-      .from('user_profile')
-      .select('*')
-      .eq('user_id', user.id)
-      .single()
+      const { data: profileData } = await supabase
+        .from('user_profile')
+        .select('*')
+        .eq('user_id', user.id)
+        .single()
 
-    setEntries(weightData || [])
-    setProfile(profileData)
+      setEntries(weightData || [])
+      setProfile(profileData)
 
-    const todayEntry = weightData?.find(e => e.date === getToday())
-    setInputWeight(todayEntry?.weight_kg?.toString() || '')
-    setInputHeight(profileData?.height_cm?.toString() || '')
-    setInputGoal(profileData?.weight_goal_kg?.toString() || '')
-    setInputGender(profileData?.gender || '')
-    setLoading(false)
+      const todayEntry = weightData?.find(e => e.date === getToday())
+      setInputWeight(todayEntry?.weight_kg?.toString() || '')
+      setInputHeight(profileData?.height_cm?.toString() || '')
+      setInputGoal(profileData?.weight_goal_kg?.toString() || '')
+      setInputGender(profileData?.gender || '')
+      setLoading(false)
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur de chargement.')
+    }
   }
 
   useEffect(() => { fetchData() }, [period])
 
   const handleSaveWeight = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('weight_entries').upsert({
-      user_id: user.id,
-      date: getToday(),
-      weight_kg: parseFloat(inputWeight),
-    }, { onConflict: 'user_id,date' })
-    setEditing(false)
-    fetchData()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('weight_entries').upsert({
+        user_id: user.id,
+        date: getToday(),
+        weight_kg: parseFloat(inputWeight),
+      }, { onConflict: 'user_id,date' })
+      setEditing(false)
+      toast.success('Poids enregistré !')
+      fetchData()
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur lors de l\'enregistrement du poids.')
+    }
   }
 
   const handleSaveProfile = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('user_profile').upsert({
-      user_id: user.id,
-      height_cm: parseFloat(inputHeight) || null,
-      weight_goal_kg: parseFloat(inputGoal) || null,
-      gender: inputGender || null,
-    }, { onConflict: 'user_id' })
-    setEditingProfile(false)
-    fetchData()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('user_profile').upsert({
+        user_id: user.id,
+        height_cm: parseFloat(inputHeight) || null,
+        weight_goal_kg: parseFloat(inputGoal) || null,
+        gender: inputGender || null,
+      }, { onConflict: 'user_id' })
+      setEditingProfile(false)
+      toast.success('Objectif mis à jour !')
+      fetchData()
+    } catch (err) {
+      await handleSupabaseError(err, toast, 'Erreur lors de la mise à jour du profil.')
+    }
   }
 
   if (loading) return (
