@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Footprints, Dumbbell, Flame, Scale, Zap, CalendarDays } from 'lucide-react'
 
-const CALORIES_PER_STEP = 0.04
 
 function getToday() {
   return new Date().toISOString().split('T')[0]
@@ -183,7 +182,6 @@ export default function DashboardPage() {
   )
 
   const stepsProgress = steps ? Math.min((steps.steps / steps.goal) * 100, 100) : 0
-  const stepsCalories = steps ? Math.round(steps.steps * CALORIES_PER_STEP) : 0
   const firstName = user?.user_metadata?.full_name?.split(' ')[0] || 'Toi'
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'

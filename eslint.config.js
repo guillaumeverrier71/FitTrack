@@ -23,7 +23,16 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-unused-vars': ['error', {
+        varsIgnorePattern: '^[A-Z_]',
+        argsIgnorePattern: '^[_A-Z]',
+        destructuredArrayIgnorePattern: '^_',
+        ignoreRestSiblings: true,
+      }],
+      // Trop strict : appeler une fonction async dans useEffect est un pattern valide
+      'react-hooks/set-state-in-effect': 'off',
+      // Avertissement DX seulement, pas bloquant en production
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
 ])
