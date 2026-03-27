@@ -1,4 +1,4 @@
-import { Outlet, NavLink } from 'react-router-dom'
+import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { Dumbbell, Footprints, Flame, Scale, Home, User } from 'lucide-react'
 import { useSession } from '../../context/SessionContext'
@@ -20,6 +20,7 @@ const navItems = [
 
 export default function AppLayout() {
   const { activeSession, sessionVisible, minimizeSession, resumeSession, closeSession } = useSession()
+  const location = useLocation()
   const isOnline = useOnlineStatus()
   const toast = useToast()
   const { syncing, pendingCount } = useOfflineSync()
@@ -92,8 +93,10 @@ export default function AppLayout() {
         </div>
       )}
 
-      <main className={`flex-1 overflow-y-auto pb-20 ${!isOnline ? 'pt-8' : ''}`}>
-        <Outlet />
+      <main className={`flex-1 overflow-y-auto pb-20 ${!isOnline || syncing ? 'pt-8' : ''}`}>
+        <div key={location.pathname} className="page-enter">
+          <Outlet />
+        </div>
       </main>
 
       {/* Bannière séance en cours — visible sur tous les onglets */}
