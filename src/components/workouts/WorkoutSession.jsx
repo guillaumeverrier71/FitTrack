@@ -4,8 +4,8 @@ import { supabase } from '../../lib/supabase'
 
 function getSuggestion(lastWeight, lastReps) {
   if (!lastWeight || !lastReps) return null
-  if (lastReps > 10) {
-    return { weight: parseFloat(lastWeight) + 2, reps: lastReps, reason: '+2kg' }
+  if (lastReps >= 12) {
+    return { weight: parseFloat(lastWeight) + 2, reps: 8, reason: '+2kg / retour 8 reps' }
   } else {
     return { weight: parseFloat(lastWeight), reps: lastReps + 2, reason: '+2 reps' }
   }

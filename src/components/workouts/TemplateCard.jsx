@@ -1,216 +1,99 @@
-import { useState, useEffect } from 'react'
+import { Play, Trash2, Copy } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { TrendingUp } from 'lucide-react'
 
-function formatDate(dateStr) {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
-}
+export default function TemplateCard({ template, onStart, onDelete, onDuplicate }) {
+  const exercises = template.template_exercises || []
 
-export default function ProgressTab() {
-  const [exercises, setExercises] = useState([])
-  const [selected, setSelected] = useState(null)
-  const [chartData, setChartData] = useState([])
-  const [stats, setStats] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [loadingChart, setLoadingChart] = useState(false)
+  const handleDelete = async () => {
+    if (!confirm('Supprimer cette séance ?')) return
 
-  useEffect(() => {
-  const fetchExercises = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { console.log('Pas de user'); setLoading(false); return }
-
-    const { data: sessions, error: sessionsError } = await supabase
+    // Détache les sessions du template sans supprimer l'historique de progression
+    await supabase
       .from('workout_sessions')
-      .select('id')
-      .eq('user_id', user.id)
-      .not('finished_at', 'is', null)
+      .update({ template_id: null })
+      .eq('template_id', template.id)
 
-    console.log('Sessions:', sessions, 'Erreur:', sessionsError)
-    if (!sessions?.length) { console.log('Pas de sessions'); setLoading(false); return }
+    // Supprime uniquement le programme et ses exercices
+    await supabase.from('template_exercises').delete().eq('template_id', template.id)
+    await supabase.from('workout_templates').delete().eq('id', template.id)
 
-    const sessionIds = sessions.map(s => s.id)
-
-    const { data: sets, error: setsError } = await supabase
-      .from('session_sets')
-      .select('exercise_id, exercises(name)')
-      .in('session_id', sessionIds)
-
-    console.log('Sets:', sets, 'Erreur:', setsError)
-
-    if (sets) {
-      const unique = []
-      const seen = new Set()
-      sets.forEach(s => {
-        if (!seen.has(s.exercise_id)) {
-          seen.add(s.exercise_id)
-          unique.push({ id: s.exercise_id, name: s.exercises?.name })
-        }
-      })
-      const sorted = unique.filter(e => e.name).sort((a, b) => a.name.localeCompare(b.name))
-      console.log('Exercices trouvés:', sorted)
-      setExercises(sorted)
-      if (sorted.length > 0) setSelected(sorted[0])
-    }
-    setLoading(false)
+    onDelete()
   }
-  fetchExercises()
-}, [])
 
-  useEffect(() => {
-    if (!selected) return
-    const fetchProgress = async () => {
-      setLoadingChart(true)
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoadingChart(false); return }
+  const handleDuplicate = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
 
-      const { data: sessions } = await supabase
-        .from('workout_sessions')
-        .select('id')
-        .eq('user_id', user.id)
-        .not('finished_at', 'is', null)
+    const { data: newTemplate } = await supabase
+      .from('workout_templates')
+      .insert({ name: `${template.name} (copie)`, user_id: user.id })
+      .select()
+      .single()
 
-      if (!sessions?.length) { setLoadingChart(false); return }
-
-      const sessionIds = sessions.map(s => s.id)
-
-      const { data: sets } = await supabase
-        .from('session_sets')
-        .select('weight_kg, reps, logged_at')
-        .eq('exercise_id', selected.id)
-        .in('session_id', sessionIds)
-        .order('logged_at', { ascending: true })
-
-      if (sets && sets.length > 0) {
-        const byDate = {}
-        sets.forEach(s => {
-          const date = s.logged_at.split('T')[0]
-          const weight = parseFloat(s.weight_kg)
-          const oneRM = Math.round(weight * (1 + s.reps / 30))
-          if (!byDate[date] || weight > byDate[date].weight) {
-            byDate[date] = { date, weight, reps: s.reps, oneRM }
-          }
-        })
-
-        const data = Object.values(byDate).map(d => ({
-          date: formatDate(d.date),
-          poids: d.weight,
-          '1RM': d.oneRM,
+    if (newTemplate && exercises.length > 0) {
+      await supabase.from('template_exercises').insert(
+        exercises.map((te, i) => ({
+          template_id: newTemplate.id,
+          exercise_id: te.exercise_id,
+          sets_target: te.sets_target,
+          reps_target: te.reps_target,
+          order_index: i,
         }))
-
-        setChartData(data)
-
-        const weights = Object.values(byDate).map(d => d.weight)
-        const first = weights[0]
-        const last = weights[weights.length - 1]
-        const max = Math.max(...weights)
-        const progression = first > 0 ? (((last - first) / first) * 100).toFixed(1) : 0
-
-        setStats({ first, last, max, progression, sessions: data.length })
-      } else {
-        setChartData([])
-        setStats(null)
-      }
-      setLoadingChart(false)
+      )
     }
-    fetchProgress()
-  }, [selected])
 
-  if (loading) return <p className="text-gray-400 px-4">Chargement...</p>
-
-  if (exercises.length === 0) return (
-    <div className="flex flex-col items-center justify-center mt-20 px-4 gap-3">
-      <TrendingUp size={40} className="text-gray-700" />
-      <p className="text-gray-400 text-center">Aucune donnée pour l'instant.</p>
-      <p className="text-gray-500 text-sm text-center">Effectue des séances pour voir ta progression ici.</p>
-    </div>
-  )
+    onDuplicate?.()
+  }
 
   return (
-    <div className="px-4 flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <p className="text-gray-400 text-sm">Sélectionne un exercice</p>
-        <div className="flex flex-wrap gap-2">
-          {exercises.map(ex => (
+    <div className="bg-gray-900 rounded-2xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-white font-semibold text-lg">{template.name}</h2>
+          {template.is_default && (
+            <span className="text-xs bg-indigo-950 text-indigo-400 px-2 py-0.5 rounded-full">Modèle</span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          {template.is_default ? (
             <button
-              key={ex.id}
-              onClick={() => setSelected(ex)}
-              className={`text-sm px-3 py-2 rounded-xl transition-colors ${
-                selected?.id === ex.id
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-900 text-gray-400'
-              }`}
+              onClick={handleDuplicate}
+              className="text-gray-500 hover:text-indigo-400 p-2 rounded-lg transition-colors"
+              title="Dupliquer pour personnaliser"
             >
-              {ex.name}
+              <Copy size={18} />
             </button>
-          ))}
+          ) : (
+            <button
+              onClick={handleDelete}
+              className="text-gray-500 hover:text-red-400 p-2 rounded-lg transition-colors"
+            >
+              <Trash2 size={18} />
+            </button>
+          )}
+          <button
+            onClick={onStart}
+            className="bg-indigo-600 hover:bg-indigo-500 text-white p-2 rounded-lg transition-colors"
+          >
+            <Play size={18} />
+          </button>
         </div>
       </div>
 
-      {loadingChart ? (
-        <p className="text-gray-400 text-sm">Chargement...</p>
-      ) : chartData.length < 2 ? (
-        <div className="bg-gray-900 rounded-2xl p-5">
-          <p className="text-gray-500 text-sm text-center py-4">
-            Effectue au moins 2 séances avec cet exercice pour voir la progression
-          </p>
-        </div>
-      ) : (
-        <>
-          {stats && (
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-gray-900 rounded-2xl p-3 text-center">
-                <p className="text-white font-bold">{stats.max} kg</p>
-                <p className="text-gray-500 text-xs mt-1">Record</p>
-              </div>
-              <div className="bg-gray-900 rounded-2xl p-3 text-center">
-                <p className={`font-bold ${parseFloat(stats.progression) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {parseFloat(stats.progression) > 0 ? '+' : ''}{stats.progression}%
-                </p>
-                <p className="text-gray-500 text-xs mt-1">Progression</p>
-              </div>
-              <div className="bg-gray-900 rounded-2xl p-3 text-center">
-                <p className="text-white font-bold">{stats.sessions}</p>
-                <p className="text-gray-500 text-xs mt-1">Séances</p>
-              </div>
+      <div className="flex flex-col gap-1">
+        {exercises.length === 0 ? (
+          <p className="text-gray-500 text-sm">Aucun exercice</p>
+        ) : (
+          exercises.map(ex => (
+            <div key={ex.id} className="flex items-center gap-2">
+              <span className="text-indigo-400 text-xs bg-indigo-950 px-2 py-0.5 rounded-full">
+                {ex.exercises?.muscle_groups?.name}
+              </span>
+              <span className="text-gray-300 text-sm">{ex.exercises?.name}</span>
+              <span className="text-gray-500 text-xs ml-auto">{ex.sets_target} × {ex.reps_target}</span>
             </div>
-          )}
-
-          <div className="bg-gray-900 rounded-2xl p-5">
-            <h3 className="text-white font-semibold mb-4">Poids soulevé (kg)</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={chartData}>
-                <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} width={35} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '12px' }}
-                  labelStyle={{ color: '#9ca3af' }}
-                  formatter={(value) => [`${value} kg`, 'Poids']}
-                />
-                <Line type="monotone" dataKey="poids" stroke="#6366f1" strokeWidth={2.5} dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="bg-gray-900 rounded-2xl p-5">
-            <h3 className="text-white font-semibold mb-1">1RM estimé (kg)</h3>
-            <p className="text-gray-500 text-xs mb-4">Calculé via la formule d'Epley</p>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={chartData}>
-                <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} width={35} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '12px' }}
-                  labelStyle={{ color: '#9ca3af' }}
-                  formatter={(value) => [`${value} kg`, '1RM estimé']}
-                />
-                <Line type="monotone" dataKey="1RM" stroke="#f59e0b" strokeWidth={2.5} dot={{ fill: '#f59e0b', r: 3 }} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </>
-      )}
+          ))
+        )}
+      </div>
     </div>
   )
 }

@@ -16,30 +16,53 @@ export default function ProgressTab() {
   const [loading, setLoading] = useState(true)
   const [loadingChart, setLoadingChart] = useState(false)
 
+  // 🔹 Récupération des exercices loggés
   useEffect(() => {
     const fetchExercises = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        if (userError) {
+          console.error("Erreur récupération user :", userError)
+          return
+        }
+        console.log("Utilisateur :", user)
 
-      // Récupère uniquement les exercices qui ont été loggés
-      const { data } = await supabase
-        .from('session_sets')
-        .select('exercise_id, exercises(name)')
-        .eq('session_id', supabase.from('workout_sessions').select('id').eq('user_id', user.id))
+        // Récupère les sessions de l'utilisateur
+        const { data: sessions, error: sessionsError } = await supabase
+          .from('workout_sessions')
+          .select('id')
+          .eq('user_id', user.id)
 
-      // Passe par workout_sessions pour filtrer par user
-      const { data: sets } = await supabase
-        .from('session_sets')
-        .select(`
-          exercise_id,
-          exercises(name),
-          workout_sessions!inner(user_id)
-        `)
-        .eq('workout_sessions.user_id', user.id)
+        if (sessionsError) {
+          console.error("Erreur récupération sessions :", sessionsError)
+          return
+        }
+        console.log("Sessions trouvées :", sessions)
 
-      if (sets) {
+        const sessionIds = sessions.map(s => s.id)
+        if (sessionIds.length === 0) {
+          console.log("Aucune session pour cet utilisateur")
+          setExercises([])
+          setLoading(false)
+          return
+        }
+
+        // Récupère les sets pour ces sessions
+        const { data: exerciseSets, error: setsError } = await supabase
+          .from('session_sets')
+          .select('exercise_id, exercises(name)')
+          .in('session_id', sessionIds)
+
+        if (setsError) {
+          console.error("Erreur récupération session_sets :", setsError)
+          return
+        }
+        console.log("session_sets trouvés :", exerciseSets)
+
+        // Récupération unique des exercices
         const unique = []
         const seen = new Set()
-        sets.forEach(s => {
+        exerciseSets.forEach(s => {
           if (!seen.has(s.exercise_id)) {
             seen.add(s.exercise_id)
             unique.push({ id: s.exercise_id, name: s.exercises?.name })
@@ -47,77 +70,95 @@ export default function ProgressTab() {
         })
         setExercises(unique.sort((a, b) => a.name.localeCompare(b.name)))
         if (unique.length > 0) setSelected(unique[0])
+      } catch (err) {
+        console.error("Erreur fetchExercises :", err)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     fetchExercises()
   }, [])
 
+  // 🔹 Récupération de la progression
   useEffect(() => {
     if (!selected) return
+
     const fetchProgress = async () => {
-      setLoadingChart(true)
-      const { data: { user } } = await supabase.auth.getUser()
+      try {
+        setLoadingChart(true)
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        if (userError) throw userError
 
-      const { data: sets } = await supabase
-        .from('session_sets')
-        .select('weight_kg, reps, logged_at, workout_sessions!inner(user_id, finished_at)')
-        .eq('exercise_id', selected.id)
-        .eq('workout_sessions.user_id', user.id)
-        .not('workout_sessions.finished_at', 'is', null)
-        .order('logged_at', { ascending: true })
+        // Récupérer les sets pour l'exercice sélectionné
+        const { data: progressSets, error: progressError } = await supabase
+          .from('session_sets')
+          .select('session_id, weight_kg, reps, logged_at, workout_sessions!inner(user_id, finished_at)')
+          .eq('exercise_id', selected.id)
+          .eq('workout_sessions.user_id', user.id)
+          .not('workout_sessions.finished_at', 'is', null)
+          .order('logged_at', { ascending: true })
 
-      if (sets && sets.length > 0) {
-        // Groupe par date et prend le max de chaque jour
-        const byDate = {}
-        sets.forEach(s => {
-          const date = s.logged_at.split('T')[0]
-          const weight = parseFloat(s.weight_kg)
-          // 1RM estimé : formule Epley
-          const oneRM = Math.round(weight * (1 + s.reps / 30))
-          if (!byDate[date] || weight > byDate[date].weight) {
-            byDate[date] = { date, weight, reps: s.reps, oneRM }
-          }
-        })
+        if (progressError) throw progressError
 
-        const data = Object.values(byDate).map(d => ({
-          date: formatDate(d.date),
-          poids: d.weight,
-          '1RM': d.oneRM,
-        }))
+        console.log("Données progression :", progressSets)
 
-        setChartData(data)
+        if (progressSets && progressSets.length > 0) {
+          // Regrouper par session_id
+          const bySession = {}
+          progressSets.forEach(s => {
+            const weight = parseFloat(s.weight_kg)
+            if (!bySession[s.session_id]) {
+              bySession[s.session_id] = { date: s.logged_at.split('T')[0], volume: 0, maxWeight: 0 }
+            }
+            bySession[s.session_id].volume += weight * s.reps
+            if (weight > bySession[s.session_id].maxWeight) {
+              bySession[s.session_id].maxWeight = weight
+            }
+          })
 
-        // Stats
-        const weights = Object.values(byDate).map(d => d.weight)
-        const first = weights[0]
-        const last = weights[weights.length - 1]
-        const max = Math.max(...weights)
-        const progression = first > 0 ? (((last - first) / first) * 100).toFixed(1) : 0
+          const data = Object.entries(bySession).map(([sessionId, d]) => ({
+            sessionId,
+            date: formatDate(d.date),
+            volume: Math.round(d.volume),
+            poids: d.maxWeight,
+          }))
 
-        setStats({ first, last, max, progression, sessions: data.length })
-      } else {
-        setChartData([])
-        setStats(null)
+          setChartData(data)
+
+          // Stats
+          const pr = Math.max(...data.map(d => d.poids))
+          const lastPoids = data[data.length - 1].poids
+          const prevPoids = data.length >= 2 ? data[data.length - 2].poids : null
+          const vsLastSession = prevPoids !== null ? parseFloat((lastPoids - prevPoids).toFixed(1)) : null
+
+          setStats({ pr, vsLastSession, sessions: data.length })
+        } else {
+          setChartData([])
+          setStats(null)
+        }
+      } catch (err) {
+        console.error("Erreur fetchProgress :", err)
+      } finally {
+        setLoadingChart(false)
       }
-      setLoadingChart(false)
     }
     fetchProgress()
   }, [selected])
 
+  // 🔹 Rendu
   if (loading) return <p className="text-gray-400 px-4">Chargement...</p>
 
-  if (exercises.length === 0) return (
-    <div className="flex flex-col items-center justify-center mt-20 px-4 gap-3">
-      <TrendingUp size={40} className="text-gray-700" />
-      <p className="text-gray-400 text-center">Aucune donnée pour l'instant.</p>
-      <p className="text-gray-500 text-sm text-center">Effectue des séances pour voir ta progression ici.</p>
-    </div>
-  )
+  if (exercises.length === 0)
+    return (
+      <div className="flex flex-col items-center justify-center mt-20 px-4 gap-3">
+        <TrendingUp size={40} className="text-gray-700" />
+        <p className="text-gray-400 text-center">Aucune donnée pour l'instant.</p>
+        <p className="text-gray-500 text-sm text-center">Effectue des séances pour voir ta progression ici.</p>
+      </div>
+    )
 
   return (
     <div className="px-4 flex flex-col gap-4">
-
       {/* Sélecteur exercice */}
       <div className="flex flex-col gap-2">
         <p className="text-gray-400 text-sm">Sélectionne un exercice</p>
@@ -138,6 +179,7 @@ export default function ProgressTab() {
         </div>
       </div>
 
+      {/* Affichage graphique ou message */}
       {loadingChart ? (
         <p className="text-gray-400 text-sm">Chargement...</p>
       ) : chartData.length < 2 ? (
@@ -152,14 +194,18 @@ export default function ProgressTab() {
           {stats && (
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-gray-900 rounded-2xl p-3 text-center">
-                <p className="text-white font-bold">{stats.max} kg</p>
-                <p className="text-gray-500 text-xs mt-1">Record</p>
+                <p className="text-white font-bold">{stats.pr} kg</p>
+                <p className="text-gray-500 text-xs mt-1">Record (PR)</p>
               </div>
               <div className="bg-gray-900 rounded-2xl p-3 text-center">
-                <p className={`font-bold ${parseFloat(stats.progression) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {parseFloat(stats.progression) > 0 ? '+' : ''}{stats.progression}%
-                </p>
-                <p className="text-gray-500 text-xs mt-1">Progression</p>
+                {stats.vsLastSession !== null ? (
+                  <p className={`font-bold ${stats.vsLastSession >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stats.vsLastSession > 0 ? '+' : ''}{stats.vsLastSession} kg
+                  </p>
+                ) : (
+                  <p className="text-gray-500 font-bold">—</p>
+                )}
+                <p className="text-gray-500 text-xs mt-1">vs dernière séance</p>
               </div>
               <div className="bg-gray-900 rounded-2xl p-3 text-center">
                 <p className="text-white font-bold">{stats.sessions}</p>
@@ -168,68 +214,66 @@ export default function ProgressTab() {
             </div>
           )}
 
-          {/* Graphique poids */}
+          {/* Graphique volume total */}
           <div className="bg-gray-900 rounded-2xl p-5">
-            <h3 className="text-white font-semibold mb-4">Poids soulevé (kg)</h3>
+            <h3 className="text-white font-semibold mb-1">Volume total (kg)</h3>
+            <p className="text-gray-500 text-xs mb-4">Somme de poids × reps sur la séance</p>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={chartData}>
                 <XAxis
-                  dataKey="date"
+                  dataKey="sessionId"
                   tick={{ fill: '#6b7280', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
+                  tickFormatter={(id) => {
+                    const point = chartData.find(d => d.sessionId === id)
+                    return point ? point.date : id
+                  }}
                   interval="preserveStartEnd"
                 />
-                <YAxis
-                  tick={{ fill: '#6b7280', fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={35}
-                />
+                <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '12px' }}
-                  labelStyle={{ color: '#9ca3af' }}
-                  formatter={(value) => [`${value} kg`, 'Poids']}
+                  contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '12px', color: '#fff' }}
+                  labelFormatter={(id) => {
+                    const point = chartData.find(d => d.sessionId === id)
+                    return point ? point.date : id
+                  }}
+                  formatter={(value) => [`${value} kg`, 'Volume']}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="poids"
-                  stroke="#6366f1"
-                  strokeWidth={2.5}
-                  dot={{ fill: '#6366f1', r: 3 }}
-                  activeDot={{ r: 6 }}
-                />
+                <Line type="monotone" dataKey="volume" stroke="#6366f1" strokeWidth={2.5} dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Graphique 1RM */}
+          {/* Graphique poids max */}
           <div className="bg-gray-900 rounded-2xl p-5">
-            <h3 className="text-white font-semibold mb-1">1RM estimé (kg)</h3>
-            <p className="text-gray-500 text-xs mb-4">Calculé via la formule d'Epley</p>
+            <h3 className="text-white font-semibold mb-1">Poids max soulevé (kg)</h3>
+            <p className="text-gray-500 text-xs mb-4">Set le plus lourd par séance</p>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={chartData}>
                 <XAxis
-                  dataKey="date"
+                  dataKey="sessionId"
                   tick={{ fill: '#6b7280', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
+                  tickFormatter={(id) => {
+                    const point = chartData.find(d => d.sessionId === id)
+                    return point ? point.date : id
+                  }}
                   interval="preserveStartEnd"
                 />
-                <YAxis
-                  tick={{ fill: '#6b7280', fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={35}
-                />
+                <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '12px' }}
-                  labelStyle={{ color: '#9ca3af' }}
-                  formatter={(value) => [`${value} kg`, '1RM estimé']}
+                  contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '12px', color: '#fff' }}
+                  labelFormatter={(id) => {
+                    const point = chartData.find(d => d.sessionId === id)
+                    return point ? point.date : id
+                  }}
+                  formatter={(value) => [`${value} kg`, 'Poids max']}
                 />
                 <Line
                   type="monotone"
-                  dataKey="1RM"
+                  dataKey="poids"
                   stroke="#f59e0b"
                   strokeWidth={2.5}
                   dot={{ fill: '#f59e0b', r: 3 }}
@@ -238,6 +282,56 @@ export default function ProgressTab() {
               </LineChart>
             </ResponsiveContainer>
           </div>
+          {/* Bouton Supprimer progression */}
+            {chartData.length > 0 && (
+              <div className="flex justify-end">
+                <button
+                  className="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded-xl text-sm transition-colors"
+                  onClick={async () => {
+                    if (!selected) return
+                    try {
+                      setLoadingChart(true)
+                      const { data: { user }, error: userError } = await supabase.auth.getUser()
+                      if (userError) throw userError
+
+                      // Récupérer les sessions de l'utilisateur
+                      const { data: sessions, error: sessionsError } = await supabase
+                        .from('workout_sessions')
+                        .select('id')
+                        .eq('user_id', user.id)
+                      if (sessionsError) throw sessionsError
+
+                      const sessionIds = sessions.map(s => s.id)
+
+                      // Supprimer les sets pour cet exercice et ces sessions
+                      const { data: deletedSets, error: deleteError } = await supabase
+                        .from('session_sets')
+                        .delete()
+                        .in('session_id', sessionIds)
+                        .eq('exercise_id', selected.id)
+
+                      if (deleteError) throw deleteError
+
+                      console.log("Progression supprimée :", deletedSets)
+
+                      // Mettre à jour l'état local
+                      setChartData([])
+                      setStats(null)
+
+                      // Optionnel : retirer l'exercice de la liste si tu veux
+                      setExercises(prev => prev.filter(ex => ex.id !== selected.id))
+                      setSelected(null)
+                    } catch (err) {
+                      console.error("Erreur suppression progression :", err)
+                    } finally {
+                      setLoadingChart(false)
+                    }
+                  }}
+                >
+                  Supprimer la progression
+                </button>
+              </div>
+            )}
         </>
       )}
     </div>
