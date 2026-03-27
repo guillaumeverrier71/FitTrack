@@ -170,6 +170,7 @@ export default function WorkoutSession({ template, onFinish }) {
                   src={ex.exercises.gif_url}
                   alt={ex.exercises.name}
                   className="w-full max-h-40 object-contain rounded-xl bg-gray-900"
+                  onError={e => e.target.style.display = 'none'}
                 />
               )}
 

@@ -172,6 +172,7 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
                         src={exo.gif_url}
                         alt={exo.name}
                         className="w-10 h-10 rounded-lg object-cover bg-gray-700"
+                        onError={e => e.target.style.display = 'none'}
                       />
                     )}
                     <span className="text-sm flex-1 text-left">{exo.name}</span>
