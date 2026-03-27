@@ -1,28 +1,30 @@
-import { Play, Trash2, Copy } from 'lucide-react'
+import { useState } from 'react'
+import { Trash2, Copy, Play, Dumbbell } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import ConfirmModal from '../ui/ConfirmModal'
 
 export default function TemplateCard({ template, onStart, onDelete, onDuplicate }) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const exercises = template.template_exercises || []
 
+  // Groupes musculaires uniques
+  const muscleGroups = [...new Set(
+    exercises.map(ex => ex.exercises?.muscle_groups?.name).filter(Boolean)
+  )]
+
+  // Stats rapides
+  const totalSets = exercises.reduce((acc, ex) => acc + ex.sets_target, 0)
+  const estimatedMinutes = Math.round(totalSets * 2.5)
+
   const handleDelete = async () => {
-    if (!confirm('Supprimer cette séance ?')) return
-
-    // Détache les sessions du template sans supprimer l'historique de progression
-    await supabase
-      .from('workout_sessions')
-      .update({ template_id: null })
-      .eq('template_id', template.id)
-
-    // Supprime uniquement le programme et ses exercices
+    await supabase.from('workout_sessions').update({ template_id: null }).eq('template_id', template.id)
     await supabase.from('template_exercises').delete().eq('template_id', template.id)
     await supabase.from('workout_templates').delete().eq('id', template.id)
-
     onDelete()
   }
 
   const handleDuplicate = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-
     const { data: newTemplate } = await supabase
       .from('workout_templates')
       .insert({ name: `${template.name} (copie)`, user_id: user.id })
@@ -40,60 +42,98 @@ export default function TemplateCard({ template, onStart, onDelete, onDuplicate 
         }))
       )
     }
-
     onDuplicate?.()
   }
 
   return (
-    <div className="bg-gray-900 rounded-2xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-white font-semibold text-lg">{template.name}</h2>
-          {template.is_default && (
-            <span className="text-xs bg-indigo-950 text-indigo-400 px-2 py-0.5 rounded-full">Modèle</span>
-          )}
-        </div>
-        <div className="flex gap-2">
-          {template.is_default ? (
-            <button
-              onClick={handleDuplicate}
-              className="text-gray-500 hover:text-indigo-400 p-2 rounded-lg transition-colors"
-              title="Dupliquer pour personnaliser"
-            >
-              <Copy size={18} />
-            </button>
-          ) : (
-            <button
-              onClick={handleDelete}
-              className="text-gray-500 hover:text-red-400 p-2 rounded-lg transition-colors"
-            >
-              <Trash2 size={18} />
-            </button>
-          )}
-          <button
-            onClick={onStart}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white p-2 rounded-lg transition-colors"
-          >
-            <Play size={18} />
-          </button>
-        </div>
-      </div>
+    <div className={`bg-gray-900 rounded-2xl overflow-hidden border-l-4 ${template.is_default ? 'border-indigo-500' : 'border-gray-700'}`}>
 
-      <div className="flex flex-col gap-1">
-        {exercises.length === 0 ? (
-          <p className="text-gray-500 text-sm">Aucun exercice</p>
-        ) : (
-          exercises.map(ex => (
-            <div key={ex.id} className="flex items-center gap-2">
-              <span className="text-indigo-400 text-xs bg-indigo-950 px-2 py-0.5 rounded-full">
-                {ex.exercises?.muscle_groups?.name}
-              </span>
-              <span className="text-gray-300 text-sm">{ex.exercises?.name}</span>
-              <span className="text-gray-500 text-xs ml-auto">{ex.sets_target} × {ex.reps_target}</span>
+      {/* Header */}
+      <div className="p-4 pb-3">
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <h2 className="text-white font-bold text-lg leading-tight">{template.name}</h2>
+              {template.is_default && (
+                <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/30 shrink-0">
+                  Modèle
+                </span>
+              )}
             </div>
-          ))
+            {/* Méta : exercices + durée */}
+            <p className="text-gray-500 text-xs">
+              {exercises.length} exercice{exercises.length > 1 ? 's' : ''} · ~{estimatedMinutes} min
+            </p>
+          </div>
+
+          {/* Actions secondaires */}
+          <div className="flex gap-1">
+            {template.is_default ? (
+              <button
+                onClick={handleDuplicate}
+                className="text-gray-600 hover:text-indigo-400 p-2 rounded-xl transition-colors"
+                title="Dupliquer pour personnaliser"
+              >
+                <Copy size={16} />
+              </button>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="text-gray-600 hover:text-red-400 p-2 rounded-xl transition-colors"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Groupes musculaires */}
+        {muscleGroups.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {muscleGroups.map(group => (
+              <span key={group} className="text-xs bg-gray-800 text-gray-400 px-2.5 py-1 rounded-full">
+                {group}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Liste exercices */}
+        {exercises.length > 0 && (
+          <div className="flex flex-col divide-y divide-gray-800">
+            {exercises.map(ex => (
+              <div key={ex.id} className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-2">
+                  <Dumbbell size={13} className="text-gray-600 shrink-0" />
+                  <span className="text-gray-300 text-sm">{ex.exercises?.name}</span>
+                </div>
+                <span className="text-indigo-400 text-xs font-medium bg-indigo-500/10 px-2 py-0.5 rounded-lg">
+                  {ex.sets_target} × {ex.reps_target}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
+
+      {/* Bouton Démarrer */}
+      <button
+        onClick={onStart}
+        className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold py-3.5 transition-colors"
+      >
+        <Play size={16} fill="white" />
+        Démarrer la séance
+      </button>
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="Supprimer la séance ?"
+          description={`"${template.name}" sera définitivement supprimée.`}
+          confirmLabel="Supprimer"
+          onConfirm={() => { setConfirmDelete(false); handleDelete() }}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
     </div>
   )
 }

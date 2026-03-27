@@ -35,6 +35,7 @@ export default function WeightPage() {
   const [inputWeight, setInputWeight] = useState('')
   const [inputHeight, setInputHeight] = useState('')
   const [inputGoal, setInputGoal] = useState('')
+  const [inputGender, setInputGender] = useState('')
   const [loading, setLoading] = useState(true)
 
   const fetchData = async () => {
@@ -64,6 +65,7 @@ export default function WeightPage() {
     setInputWeight(todayEntry?.weight_kg?.toString() || '')
     setInputHeight(profileData?.height_cm?.toString() || '')
     setInputGoal(profileData?.weight_goal_kg?.toString() || '')
+    setInputGender(profileData?.gender || '')
     setLoading(false)
   }
 
@@ -86,6 +88,7 @@ export default function WeightPage() {
       user_id: user.id,
       height_cm: parseFloat(inputHeight) || null,
       weight_goal_kg: parseFloat(inputGoal) || null,
+      gender: inputGender || null,
     }, { onConflict: 'user_id' })
     setEditingProfile(false)
     fetchData()
@@ -115,8 +118,11 @@ export default function WeightPage() {
     poids: parseFloat(e.weight_kg),
   }))
 
-  const minWeight = entries.length > 0 ? Math.min(...entries.map(e => e.weight_kg)) - 2 : 50
-  const maxWeight = entries.length > 0 ? Math.max(...entries.map(e => e.weight_kg)) + 2 : 100
+  const goalWeight = profile?.weight_goal_kg ? parseFloat(profile.weight_goal_kg) : null
+  const allWeights = entries.map(e => parseFloat(e.weight_kg))
+  if (goalWeight) allWeights.push(goalWeight)
+  const minWeight = allWeights.length > 0 ? Math.min(...allWeights) - 2 : 50
+  const maxWeight = allWeights.length > 0 ? Math.max(...allWeights) + 2 : 100
 
   return (
     <div className="p-4 pb-24 bg-gray-950 min-h-screen flex flex-col gap-4">
@@ -300,26 +306,42 @@ export default function WeightPage() {
 
         {editingProfile ? (
           <div className="flex flex-col gap-3">
-            <div>
-              <label className="text-gray-400 text-xs mb-1 block">Taille (cm)</label>
-              <input
-                type="number"
-                value={inputHeight}
-                onChange={e => setInputHeight(e.target.value)}
-                placeholder="ex: 178"
-                className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-gray-400 text-xs mb-1 block">Taille (cm)</label>
+                <input
+                  type="number"
+                  value={inputHeight}
+                  onChange={e => setInputHeight(e.target.value)}
+                  placeholder="ex: 178"
+                  className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full"
+                />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs mb-1 block">Objectif (kg)</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  value={inputGoal}
+                  onChange={e => setInputGoal(e.target.value)}
+                  placeholder="ex: 75"
+                  className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full"
+                />
+              </div>
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-1 block">Objectif de poids (kg)</label>
-              <input
-                type="number"
-                step="0.5"
-                value={inputGoal}
-                onChange={e => setInputGoal(e.target.value)}
-                placeholder="ex: 75"
-                className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full"
-              />
+              <label className="text-gray-400 text-xs mb-1 block">Genre</label>
+              <div className="flex gap-2">
+                {['homme', 'femme'].map(g => (
+                  <button
+                    key={g}
+                    onClick={() => setInputGender(g)}
+                    className={`flex-1 py-3 rounded-xl text-sm font-medium transition-colors ${inputGender === g ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}
+                  >
+                    {g === 'homme' ? 'Homme' : 'Femme'}
+                  </button>
+                ))}
+              </div>
             </div>
             <button
               onClick={handleSaveProfile}
@@ -329,7 +351,7 @@ export default function WeightPage() {
             </button>
           </div>
         ) : (
-          <div className="flex gap-4">
+          <div className="flex gap-6">
             <div>
               <p className="text-gray-400 text-xs">Taille</p>
               <p className="text-white font-semibold">{profile?.height_cm ? `${profile.height_cm} cm` : '—'}</p>
@@ -337,6 +359,10 @@ export default function WeightPage() {
             <div>
               <p className="text-gray-400 text-xs">Objectif</p>
               <p className="text-white font-semibold">{profile?.weight_goal_kg ? `${profile.weight_goal_kg} kg` : '—'}</p>
+            </div>
+            <div>
+              <p className="text-gray-400 text-xs">Genre</p>
+              <p className="text-white font-semibold">{profile?.gender === 'homme' ? 'Homme' : profile?.gender === 'femme' ? 'Femme' : '—'}</p>
             </div>
           </div>
         )}

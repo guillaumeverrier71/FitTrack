@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
-import { X, Plus, Check } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { X, Plus, Check, Pause, Play } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import ConfirmModal from '../ui/ConfirmModal'
 
 function getSuggestion(lastWeight, lastReps) {
   if (!lastWeight || !lastReps) return null
@@ -11,11 +12,31 @@ function getSuggestion(lastWeight, lastReps) {
   }
 }
 
-export default function WorkoutSession({ template, onFinish }) {
+function formatTime(seconds) {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+export default function WorkoutSession({ template, onMinimize, onDone }) {
   const [sessionId, setSessionId] = useState(null)
   const [sets, setSets] = useState({})
   const [lastSession, setLastSession] = useState({})
   const [saving, setSaving] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const [confirmAbandon, setConfirmAbandon] = useState(false)
+  const intervalRef = useRef(null)
+
+  useEffect(() => {
+    if (paused) return
+    intervalRef.current = setInterval(() => {
+      setElapsed(e => e + 1)
+    }, 1000)
+    return () => clearInterval(intervalRef.current)
+  }, [paused])
 
   const exercises = template.template_exercises || []
 
@@ -135,7 +156,15 @@ export default function WorkoutSession({ template, onFinish }) {
       .eq('id', sessionId)
 
     setSaving(false)
-    onFinish()
+    onDone()
+  }
+
+  const handleAbandon = async () => {
+    if (sessionId) {
+      await supabase.from('session_sets').delete().eq('session_id', sessionId)
+      await supabase.from('workout_sessions').delete().eq('id', sessionId)
+    }
+    onDone()
   }
 
   return (
@@ -143,9 +172,22 @@ export default function WorkoutSession({ template, onFinish }) {
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-800">
         <h1 className="text-white font-bold text-lg">{template.name}</h1>
-        <button onClick={onFinish} className="text-gray-400 hover:text-white">
-          <X size={22} />
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-gray-900 px-3 py-1.5 rounded-xl">
+            <span className={`text-sm font-mono font-semibold ${paused ? 'text-gray-500' : 'text-indigo-400'}`}>
+              {formatTime(elapsed)}
+            </span>
+            <button
+              onClick={() => setPaused(p => !p)}
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              {paused ? <Play size={15} fill="currentColor" /> : <Pause size={15} />}
+            </button>
+          </div>
+          <button onClick={onMinimize} className="text-gray-400 hover:text-white">
+            <X size={22} />
+          </button>
+        </div>
       </div>
 
       {/* Exercices */}
@@ -243,16 +285,32 @@ export default function WorkoutSession({ template, onFinish }) {
         })}
       </div>
 
-      {/* Bouton terminer */}
-      <div className="fixed bottom-16 left-0 right-0 p-4 bg-gray-950 border-t border-gray-800">
+      {/* Boutons bas */}
+      <div className="fixed bottom-16 left-0 right-0 p-4 bg-gray-950 border-t border-gray-800 flex gap-3">
+        <button
+          onClick={() => setConfirmAbandon(true)}
+          className="bg-gray-800 hover:bg-red-950 text-red-400 font-semibold py-4 px-5 rounded-xl transition-colors"
+        >
+          Abandonner
+        </button>
         <button
           onClick={handleFinish}
           disabled={saving}
-          className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-semibold py-4 rounded-xl transition-colors text-lg"
+          className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-semibold py-4 rounded-xl transition-colors"
         >
-          {saving ? 'Enregistrement...' : 'Terminer la séance ✓'}
+          {saving ? 'Enregistrement...' : 'Terminer ✓'}
         </button>
       </div>
+
+      {confirmAbandon && (
+        <ConfirmModal
+          title="Abandonner la séance ?"
+          description="Les séries enregistrées seront perdues définitivement."
+          confirmLabel="Abandonner"
+          onConfirm={() => { setConfirmAbandon(false); handleAbandon() }}
+          onCancel={() => setConfirmAbandon(false)}
+        />
+      )}
     </div>
   )
 }

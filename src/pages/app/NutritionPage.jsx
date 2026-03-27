@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Plus, Trash2, Flame, Target, X } from 'lucide-react'
+import { Plus, Trash2, Flame, Target, X, Settings2 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import FoodSearch from '../../components/nutrition/FoodSearch'
 
@@ -200,9 +200,12 @@ export default function NutritionPage() {
         <h1 className="text-2xl font-bold text-white">Calories</h1>
         <button
           onClick={() => setShowProfileForm(true)}
-          className="text-xs bg-gray-800 text-gray-400 px-3 py-2 rounded-xl hover:text-white transition-colors"
+          className="flex items-center gap-2 bg-gray-900 border border-gray-800 hover:border-indigo-500/50 text-gray-400 hover:text-white px-3 py-2 rounded-xl transition-all"
         >
-          ⚙️ Objectif
+          <Settings2 size={14} className="text-indigo-400 shrink-0" />
+          <span className="text-xs font-medium">
+            {calorieGoal ? `${calorieGoal} kcal` : 'Objectif'}
+          </span>
         </button>
       </div>
 

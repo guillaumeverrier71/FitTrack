@@ -142,7 +142,7 @@ export default function DashboardPage() {
 
       {/* Header */}
       <div className="pt-2">
-        <h1 className="text-2xl font-bold text-white">{greeting} 👋</h1>
+        <h1 className="text-2xl font-bold text-white">{greeting} {firstName} 👋</h1>
         <p className="text-gray-400 text-sm mt-1">Voilà où t'en es aujourd'hui</p>
       </div>
 
