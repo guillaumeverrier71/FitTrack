@@ -1,18 +1,27 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
-import AuthPage from './pages/auth/AuthPage'
-import ResetPasswordPage from './pages/auth/ResetPasswordPage'
-import AppLayout from './components/layout/AppLayout'
-import WorkoutsPage from './pages/app/WorkoutsPage'
-import StepsPage from './pages/app/StepsPage'
-import DashboardPage from './pages/app/DashboardPage'
-import WeightPage from './pages/app/WeightPage'
-import ProfilePage from './pages/app/ProfilePage'
-import NutritionPage from './pages/app/NutritionPage'
 import { SessionProvider } from './context/SessionContext'
 import { ToastProvider } from './context/ToastContext'
 import ErrorBoundary from './components/ui/ErrorBoundary'
+
+const AuthPage = lazy(() => import('./pages/auth/AuthPage'))
+const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'))
+const AppLayout = lazy(() => import('./components/layout/AppLayout'))
+const DashboardPage = lazy(() => import('./pages/app/DashboardPage'))
+const WorkoutsPage = lazy(() => import('./pages/app/WorkoutsPage'))
+const StepsPage = lazy(() => import('./pages/app/StepsPage'))
+const WeightPage = lazy(() => import('./pages/app/WeightPage'))
+const ProfilePage = lazy(() => import('./pages/app/ProfilePage'))
+const NutritionPage = lazy(() => import('./pages/app/NutritionPage'))
+
+function PageLoader() {
+  return (
+    <div className="h-screen flex items-center justify-center bg-gray-950">
+      <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+}
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -38,6 +47,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <ToastProvider>
+        <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/auth" element={!session ? <AuthPage /> : <Navigate to="/" />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -50,6 +60,7 @@ export default function App() {
             <Route path="nutrition" element={<NutritionPage />} />
           </Route>
         </Routes>
+        </Suspense>
       </ToastProvider>
     </ErrorBoundary>
   )
