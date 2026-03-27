@@ -6,23 +6,12 @@ export default function TemplateCard({ template, onStart, onDelete }) {
 
   const handleDelete = async () => {
   if (!confirm('Supprimer cette séance ?')) return
-  
-  // Supprime d'abord les session_sets liés
-  const { data: sessions } = await supabase
-    .from('workout_sessions')
-    .select('id')
-    .eq('template_id', template.id)
 
-  if (sessions?.length > 0) {
-    const sessionIds = sessions.map(s => s.id)
-    await supabase.from('session_sets').delete().in('session_id', sessionIds)
-    await supabase.from('workout_sessions').delete().eq('template_id', template.id)
-  }
-
-  // Puis les template_exercises et le template
+  // Supprime uniquement les template_exercises et le template
+  // Les sessions loggées sont conservées pour l'historique
   await supabase.from('template_exercises').delete().eq('template_id', template.id)
   await supabase.from('workout_templates').delete().eq('id', template.id)
-  
+
   onDelete()
 }
 
