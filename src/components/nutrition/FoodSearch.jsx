@@ -1,10 +1,37 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Search, Plus, X, Clock } from 'lucide-react'
+import { Search, Plus, X, Clock, Globe, Loader } from 'lucide-react'
+
+async function searchOpenFoodFacts(query) {
+  try {
+    const res = await fetch(
+      `https://world.openfoodfacts.org/cgi/search.pl?action=process&search_terms=${encodeURIComponent(query)}&search_simple=1&json=1&fields=product_name,nutriments,code&page_size=10&lc=fr&cc=fr`,
+      { signal: AbortSignal.timeout(5000) }
+    )
+    const data = await res.json()
+    return (data.products || [])
+      .filter(p => p.product_name?.trim() && p.nutriments?.['energy-kcal_100g'] > 0)
+      .map(p => ({
+        id: `off_${p.code}`,
+        name: p.product_name.trim(),
+        calories_per_100g: Math.round(p.nutriments['energy-kcal_100g']),
+        proteins_per_100g: Math.round((p.nutriments.proteins_100g || 0) * 10) / 10,
+        carbs_per_100g: Math.round((p.nutriments.carbohydrates_100g || 0) * 10) / 10,
+        fats_per_100g: Math.round((p.nutriments.fat_100g || 0) * 10) / 10,
+        unit: 'g',
+        _off: true,
+        _code: p.code,
+      }))
+  } catch {
+    return []
+  }
+}
 
 export default function FoodSearch({ category, onAdd, onClose }) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState([])
+  const [localResults, setLocalResults] = useState([])
+  const [offResults, setOffResults] = useState([])
+  const [offLoading, setOffLoading] = useState(false)
   const [recent, setRecent] = useState([])
   const [selected, setSelected] = useState(null)
   const [quantity, setQuantity] = useState('100')
@@ -42,22 +69,59 @@ export default function FoodSearch({ category, onAdd, onClose }) {
   }, [])
 
   useEffect(() => {
-    if (!query.trim()) { setResults([]); return }
-    const search = async () => {
+    if (!query.trim()) {
+      setLocalResults([])
+      setOffResults([])
+      return
+    }
+
+    const timeout = setTimeout(async () => {
+      // Recherche locale
       const { data } = await supabase
         .from('foods')
         .select('*')
         .ilike('name', `%${query}%`)
         .limit(10)
-      setResults(data || [])
-    }
-    const timeout = setTimeout(search, 300)
+      setLocalResults(data || [])
+
+      // Recherche OpenFoodFacts
+      setOffLoading(true)
+      const off = await searchOpenFoodFacts(query)
+      // Filtrer les doublons avec les résultats locaux
+      const localNames = new Set((data || []).map(f => f.name.toLowerCase()))
+      setOffResults(off.filter(f => !localNames.has(f.name.toLowerCase())))
+      setOffLoading(false)
+    }, 400)
+
     return () => clearTimeout(timeout)
   }, [query])
 
   const handleSelect = (food) => {
     setSelected(food)
     setQuantity(food.unit === 'unité' ? '1' : '100')
+  }
+
+  const handleSelectOFF = async (food) => {
+    // Sauvegarder dans la table foods pour les prochaines recherches
+    const { data: existing } = await supabase
+      .from('foods')
+      .select('id, name, calories_per_100g, proteins_per_100g, carbs_per_100g, fats_per_100g, unit')
+      .ilike('name', food.name)
+      .limit(1)
+
+    if (existing?.[0]) {
+      handleSelect(existing[0])
+    } else {
+      const { data: inserted } = await supabase.from('foods').insert({
+        name: food.name,
+        calories_per_100g: food.calories_per_100g,
+        proteins_per_100g: food.proteins_per_100g,
+        carbs_per_100g: food.carbs_per_100g,
+        fats_per_100g: food.fats_per_100g,
+        unit: 'g',
+      }).select().single()
+      handleSelect(inserted || food)
+    }
   }
 
   const calcMacro = (per100g, qty, isUnit) => {
@@ -78,7 +142,7 @@ export default function FoodSearch({ category, onAdd, onClose }) {
       carbs: Math.round(selected.carbs_per_100g * multiplier * 10) / 10,
       fats: Math.round(selected.fats_per_100g * multiplier * 10) / 10,
       quantity_g: isUnit ? qty * 100 : qty,
-      food_id: selected.id,
+      food_id: selected.id || null,
       category,
     })
   }
@@ -99,8 +163,10 @@ export default function FoodSearch({ category, onAdd, onClose }) {
     setShowCustomForm(false)
   }
 
-  const displayList = query.trim() ? results : recent
   const isUnit = selected?.unit === 'unité'
+  const hasQuery = query.trim().length > 0
+  const showRecent = !hasQuery && recent.length > 0
+  const hasAnyResults = localResults.length > 0 || offResults.length > 0
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-end">
@@ -193,6 +259,7 @@ export default function FoodSearch({ category, onAdd, onClose }) {
                   className="bg-transparent text-white outline-none flex-1 placeholder-gray-500"
                   autoFocus
                 />
+                {offLoading && <Loader size={16} className="text-gray-500 animate-spin shrink-0" />}
               </div>
               <button onClick={() => setShowCustomForm(true)} className="flex items-center gap-2 text-indigo-400 text-sm">
                 <Plus size={16} /> Ajouter un aliment personnalisé
@@ -200,32 +267,67 @@ export default function FoodSearch({ category, onAdd, onClose }) {
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 pb-4 flex flex-col gap-2">
-              {!query.trim() && recent.length > 0 && (
-                <div className="flex items-center gap-2 mb-1">
-                  <Clock size={14} className="text-gray-500" />
-                  <span className="text-gray-500 text-xs">Récents</span>
-                </div>
+              {/* Récents */}
+              {showRecent && (
+                <>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Clock size={14} className="text-gray-500" />
+                    <span className="text-gray-500 text-xs">Récents</span>
+                  </div>
+                  {recent.map(food => (
+                    <FoodRow key={food.id} food={food} onSelect={handleSelect} />
+                  ))}
+                </>
               )}
-              {displayList.length === 0 && query.trim() && (
+
+              {/* Résultats locaux */}
+              {hasQuery && localResults.length > 0 && (
+                <>
+                  {localResults.map(food => (
+                    <FoodRow key={food.id} food={food} onSelect={handleSelect} />
+                  ))}
+                </>
+              )}
+
+              {/* Résultats OpenFoodFacts */}
+              {hasQuery && offResults.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 mt-2 mb-1">
+                    <Globe size={14} className="text-indigo-500" />
+                    <span className="text-indigo-400 text-xs">OpenFoodFacts</span>
+                  </div>
+                  {offResults.map(food => (
+                    <FoodRow key={food.id} food={food} onSelect={handleSelectOFF} isOff />
+                  ))}
+                </>
+              )}
+
+              {/* Aucun résultat */}
+              {hasQuery && !offLoading && !hasAnyResults && (
                 <p className="text-gray-500 text-sm text-center py-4">Aucun résultat pour "{query}"</p>
               )}
-              {displayList.map(food => (
-                <button key={food.id} onClick={() => handleSelect(food)}
-                  className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3 text-left hover:bg-gray-700 transition-colors">
-                  <div>
-                    <p className="text-white text-sm font-medium">{food.name}</p>
-                    <p className="text-gray-400 text-xs mt-0.5">
-                      {food.calories_per_100g} kcal · {food.proteins_per_100g}g prot · {food.carbs_per_100g}g gluc · {food.fats_per_100g}g lip
-                      {food.unit === 'unité' ? ' (par unité)' : ' (par 100g)'}
-                    </p>
-                  </div>
-                  <Plus size={18} className="text-indigo-400 ml-3 shrink-0" />
-                </button>
-              ))}
             </div>
           </div>
         )}
       </div>
     </div>
+  )
+}
+
+function FoodRow({ food, onSelect, isOff = false }) {
+  return (
+    <button
+      onClick={() => onSelect(food)}
+      className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3 text-left hover:bg-gray-700 transition-colors"
+    >
+      <div className="flex-1 min-w-0">
+        <p className="text-white text-sm font-medium truncate">{food.name}</p>
+        <p className="text-gray-400 text-xs mt-0.5">
+          {food.calories_per_100g} kcal · {food.proteins_per_100g}g prot · {food.carbs_per_100g}g gluc · {food.fats_per_100g}g lip
+          {food.unit === 'unité' ? ' (par unité)' : ' (par 100g)'}
+        </p>
+      </div>
+      <Plus size={18} className={`ml-3 shrink-0 ${isOff ? 'text-indigo-400' : 'text-indigo-400'}`} />
+    </button>
   )
 }
