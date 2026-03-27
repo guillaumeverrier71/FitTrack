@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Dumbbell } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 const SUPABASE_ERRORS = {
@@ -89,14 +88,17 @@ export default function AuthPage() {
         <div className="w-full max-w-sm flex flex-col gap-8">
 
           {/* Logo + titre */}
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-600/30">
-              <Dumbbell size={32} className="text-white" />
-            </div>
-            <div className="text-center">
-              <h1 className="text-3xl font-bold text-white tracking-tight">FitTrack</h1>
-              <p className="text-gray-400 text-sm mt-1">Suis ta progression, bats tes records</p>
-            </div>
+          <div className="flex flex-col items-center gap-3">
+            <div
+              className="w-24 h-24 rounded-2xl overflow-hidden shadow-lg"
+              style={{
+                backgroundImage: 'url(/bodypilot-logo.png)',
+                backgroundSize: '300% auto',
+                backgroundPosition: '100% center',
+                backgroundColor: 'white',
+              }}
+            />
+            <p className="text-gray-400 text-sm">Take control of your body</p>
           </div>
 
           {/* Card formulaire */}

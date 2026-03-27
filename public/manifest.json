@@ -1,6 +1,6 @@
 {
-  "name": "FitTrack",
-  "short_name": "FitTrack",
+  "name": "BodyPilot",
+  "short_name": "BodyPilot",
   "description": "Reprenez le contrôle de votre corps",
   "start_url": "/",
   "display": "standalone",

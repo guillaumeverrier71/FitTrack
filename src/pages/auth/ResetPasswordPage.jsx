@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Dumbbell, CheckCircle } from 'lucide-react'
+import { CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 export default function ResetPasswordPage() {
@@ -42,9 +42,15 @@ export default function ResetPasswordPage() {
         <div className="w-full max-w-sm flex flex-col gap-8">
 
           <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-600/30">
-              <Dumbbell size={32} className="text-white" />
-            </div>
+            <div
+              className="w-24 h-24 rounded-2xl overflow-hidden shadow-lg"
+              style={{
+                backgroundImage: 'url(/bodypilot-logo.png)',
+                backgroundSize: '300% auto',
+                backgroundPosition: '100% center',
+                backgroundColor: 'white',
+              }}
+            />
             <div className="text-center">
               <h1 className="text-2xl font-bold text-white">Nouveau mot de passe</h1>
               <p className="text-gray-400 text-sm mt-1">Choisis un nouveau mot de passe sécurisé</p>

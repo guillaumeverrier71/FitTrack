@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { ChevronRight, Dumbbell } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 
 const GOALS = [
   { value: 'lose_weight', label: 'Perdre du poids', emoji: '🔥' },
@@ -71,11 +71,17 @@ export default function OnboardingModal({ userId, onDone }) {
 
         {current === 'welcome' && (
           <>
-            <div className="flex items-center justify-center w-20 h-20 bg-indigo-600 rounded-3xl">
-              <Dumbbell size={40} className="text-white" />
-            </div>
+            <div
+              className="w-20 h-20 rounded-2xl overflow-hidden shadow-lg"
+              style={{
+                backgroundImage: 'url(/bodypilot-logo.png)',
+                backgroundSize: '300% auto',
+                backgroundPosition: '100% center',
+                backgroundColor: 'white',
+              }}
+            />
             <div className="text-center">
-              <h1 className="text-3xl font-bold text-white mb-3">Bienvenue sur FitTrack</h1>
+              <h1 className="text-3xl font-bold text-white mb-3">Bienvenue sur BodyPilot</h1>
               <p className="text-gray-400 leading-relaxed">
                 Prends 30 secondes pour configurer ton profil et obtenir une expérience personnalisée.
               </p>
