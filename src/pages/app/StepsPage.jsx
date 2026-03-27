@@ -14,7 +14,7 @@ function isToday(dateStr) {
 }
 
 function getDates(period) {
-  const days = period === 'week' ? 7 : 30
+  const days = period === 'week' ? 7 : period === 'weeks' ? 84 : 30
   const dates = []
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date()
@@ -24,11 +24,42 @@ function getDates(period) {
   return dates
 }
 
+function getMondayOf(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00')
+  const day = d.getDay() || 7 // dimanche = 7
+  d.setDate(d.getDate() - day + 1)
+  return d.toISOString().split('T')[0]
+}
+
 function formatLabel(dateStr, period) {
   const d = new Date(dateStr + 'T00:00:00')
   if (period === 'week') return d.toLocaleDateString('fr-FR', { weekday: 'short' })
+  if (period === 'weeks') return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
   const day = d.getDate()
   return day % 5 === 0 || day === 1 ? `${day}` : ''
+}
+
+function groupByWeeks(dates, data, goalDefault) {
+  const weekMap = {}
+  dates.forEach(date => {
+    const monday = getMondayOf(date)
+    if (!weekMap[monday]) weekMap[monday] = { dates: [], steps: [], goal: goalDefault }
+    const entry = data?.find(d => d.date === date)
+    if (entry) {
+      weekMap[monday].steps.push(entry.steps)
+      weekMap[monday].goal = entry.goal
+    }
+  })
+  const today = getToday()
+  const currentMonday = getMondayOf(today)
+  return Object.entries(weekMap).map(([monday, { steps, goal }]) => ({
+    date: monday,
+    label: formatLabel(monday, 'weeks'),
+    steps: steps.length ? Math.round(steps.reduce((a, b) => a + b, 0) / 7) : 0,
+    daysLogged: steps.length,
+    goal,
+    isToday: monday === currentMonday,
+  }))
 }
 
 function RoundedBar({ x, y, width, height, fill }) {
@@ -56,6 +87,8 @@ export default function StepsPage() {
   const [inputSteps, setInputSteps] = useState('')
   const [inputGoal, setInputGoal] = useState('')
   const [loading, setLoading] = useState(true)
+  const [chartLoading, setChartLoading] = useState(false)
+  const [dailyList, setDailyList] = useState([])
 
   // Jour ouvert dans la liste
   const [openDate, setOpenDate] = useState(null)
@@ -73,26 +106,49 @@ export default function StepsPage() {
       .eq('user_id', user.id)
       .in('date', dates)
 
-    const mapped = dates.map(date => {
-      const entry = data?.find(d => d.date === date)
-      return {
-        date,
-        label: formatLabel(date, period),
-        steps: entry?.steps || 0,
-        goal: entry?.goal || 10000,
-        isToday: isToday(date),
-      }
-    })
+    const mapped = period === 'weeks'
+      ? groupByWeeks(dates, data, 10000)
+      : dates.map(date => {
+          const entry = data?.find(d => d.date === date)
+          return {
+            date,
+            label: formatLabel(date, period),
+            steps: entry?.steps || 0,
+            goal: entry?.goal || 10000,
+            isToday: isToday(date),
+          }
+        })
 
     setChartData(mapped)
-    const todayEntry = mapped.find(d => d.isToday)
+
+    // Liste des jours toujours sur 30j, indépendante de la période du graphique
+    const listDates = getDates('month')
+    const listData = period === 'month' ? data : (await supabase
+      .from('daily_steps').select('*').eq('user_id', user.id).in('date', listDates)).data
+    setDailyList(listDates.map(date => {
+      const entry = listData?.find(d => d.date === date)
+      return { date, steps: entry?.steps || 0, goal: entry?.goal || 10000, isToday: isToday(date) }
+    }))
+
+    // Toujours récupérer les pas réels d'aujourd'hui, peu importe la période
+    const todayRaw = data?.find(d => d.date === getToday())
+    const todayEntry = {
+      date: getToday(),
+      steps: todayRaw?.steps || 0,
+      goal: todayRaw?.goal || 10000,
+      isToday: true,
+    }
     setToday(todayEntry)
-    setInputSteps(todayEntry?.steps?.toString() || '0')
-    setInputGoal(todayEntry?.goal?.toString() || '10000')
+    setInputSteps(todayEntry.steps.toString())
+    setInputGoal(todayEntry.goal.toString())
     setLoading(false)
+    setChartLoading(false)
   }
 
-  useEffect(() => { fetchData() }, [period])
+  useEffect(() => {
+    setChartLoading(true)
+    fetchData()
+  }, [period])
 
   const handleSaveToday = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -227,10 +283,10 @@ export default function StepsPage() {
       <div className="bg-gray-900 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-white font-semibold">
-            {period === 'week' ? 'Cette semaine' : 'Ce mois'}
+            {period === 'week' ? 'Cette semaine' : period === 'month' ? 'Ce mois' : '12 dernières semaines'}
           </h2>
           <div className="flex gap-1.5 bg-gray-800 p-1 rounded-xl">
-            {[{ key: 'week', label: '7j' }, { key: 'month', label: '30j' }].map(p => (
+            {[{ key: 'week', label: '7j' }, { key: 'month', label: '30j' }, { key: 'weeks', label: 'Semaines' }].map(p => (
               <button
                 key={p.key}
                 onClick={() => setPeriod(p.key)}
@@ -244,23 +300,37 @@ export default function StepsPage() {
           </div>
         </div>
 
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={chartData} barSize={period === 'week' ? 28 : 7}>
+        {chartLoading ? (
+          <div className="h-[180px] flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : null}
+        <ResponsiveContainer width="100%" height={chartLoading ? 0 : 180}>
+          <BarChart data={chartData} barSize={period === 'week' ? 28 : period === 'weeks' ? 18 : 7}>
             <XAxis dataKey="label" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis hide />
             <Tooltip
               contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '12px' }}
               labelStyle={{ color: '#9ca3af', fontSize: 11 }}
-              formatter={(value) => [`${value.toLocaleString('fr-FR')} pas`, '']}
+              formatter={(value) => {
+                if (period === 'weeks') return [`${value.toLocaleString('fr-FR')} pas/j en moy.`, '']
+                return [`${value.toLocaleString('fr-FR')} pas`, '']
+              }}
               labelFormatter={(_, payload) => {
                 if (!payload?.[0]) return ''
-                const d = new Date(payload[0].payload.date + 'T00:00:00')
+                const entry = payload[0].payload
+                const d = new Date(entry.date + 'T00:00:00')
+                if (period === 'weeks') {
+                  const end = new Date(d); end.setDate(d.getDate() + 6)
+                  return `Sem. du ${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} · ${entry.daysLogged || 0}j enregistrés`
+                }
                 return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })
               }}
             />
             <ReferenceLine y={goalLine} stroke="#6366f1" strokeDasharray="4 4" strokeOpacity={0.4} />
             <Bar
               dataKey="steps"
+              isAnimationActive={false}
               shape={(props) => {
                 const entry = chartData[props.index]
                 const fill = entry.isToday ? '#6366f1' : entry.steps >= entry.goal ? '#22c55e' : '#374151'
@@ -273,7 +343,7 @@ export default function StepsPage() {
         <div className="flex gap-4 mt-2 justify-center">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-full bg-indigo-500" />
-            <span className="text-gray-400 text-xs">Aujourd'hui</span>
+            <span className="text-gray-400 text-xs">{period === 'weeks' ? 'Sem. en cours' : "Aujourd'hui"}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-full bg-green-500" />
@@ -299,6 +369,29 @@ export default function StepsPage() {
             </div>
           </div>
         )}
+
+        {period === 'weeks' && (() => {
+          const weeksWithData = chartData.filter(w => w.daysLogged > 0)
+          const bestWeek = weeksWithData.length ? Math.max(...weeksWithData.map(w => w.steps)) : 0
+          const avgWeek = weeksWithData.length ? Math.round(weeksWithData.reduce((s, w) => s + w.steps, 0) / weeksWithData.length) : 0
+          const weeksGoal = chartData.filter(w => w.steps >= w.goal).length
+          return (
+            <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-800">
+              <div className="text-center">
+                <p className="text-white font-bold text-lg">{avgWeek.toLocaleString('fr-FR')}</p>
+                <p className="text-gray-500 text-xs">Moy. / jour</p>
+              </div>
+              <div className="text-center">
+                <p className="text-white font-bold text-lg">{bestWeek.toLocaleString('fr-FR')}</p>
+                <p className="text-gray-500 text-xs">Meilleure sem.</p>
+              </div>
+              <div className="text-center">
+                <p className="text-white font-bold text-lg">{weeksGoal}</p>
+                <p className="text-gray-500 text-xs">Obj. atteints</p>
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
       {/* Liste des jours */}
@@ -307,7 +400,7 @@ export default function StepsPage() {
           <h2 className="text-white font-semibold">Détail par jour</h2>
         </div>
         <div className="flex flex-col divide-y divide-gray-800">
-          {[...chartData].reverse().map(entry => (
+          {[...dailyList].reverse().map(entry => (
             <div key={entry.date}>
               {/* Ligne du jour */}
               <button
@@ -385,6 +478,7 @@ export default function StepsPage() {
           ))}
         </div>
       </div>
+
     </div>
   )
 }
