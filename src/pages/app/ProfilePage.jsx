@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { User, Mail, Ruler, Target, LogOut, Pencil, Check, Camera, Flame } from 'lucide-react'
+import { User, Mail, Ruler, Target, LogOut, Pencil, Check, Camera, Flame, Bell, BellOff } from 'lucide-react'
 import Medals from '../../components/profile/Medals'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import { useToast } from '../../context/ToastContext'
 import { handleSupabaseError } from '../../lib/handleError'
+import { usePushNotifications } from '../../hooks/usePushNotifications'
 
 export default function ProfilePage() {
   const toast = useToast()
@@ -46,6 +47,9 @@ export default function ProfilePage() {
       setInputGoal(profileData?.weight_goal_kg?.toString() || '')
       setInputAge(profileData?.age?.toString() || '')
       setInputGender(profileData?.gender || '')
+      setNotifEnabled(profileData?.notif_enabled || false)
+      setNotifTime(profileData?.notif_time || '18:00')
+      setNotifInactivityDays(profileData?.notif_inactivity_days || 2)
 
       // Poids actuel
       const { data: weightEntries } = await supabase
@@ -149,6 +153,37 @@ export default function ProfilePage() {
   }
 
   const [confirmLogout, setConfirmLogout] = useState(false)
+
+  // Notifications
+  const { supported: pushSupported, subscribed, loading: pushLoading, subscribe, unsubscribe } = usePushNotifications()
+
+  const handleToggleNotif = async () => {
+    if (!subscribed) {
+      const ok = await subscribe()
+      if (!ok) return
+      setNotifEnabled(true)
+      await saveNotifSettings(true, notifTime, notifInactivityDays)
+    } else {
+      await unsubscribe()
+      setNotifEnabled(false)
+      await saveNotifSettings(false, notifTime, notifInactivityDays)
+    }
+  }
+
+  const saveNotifSettings = async (enabled, time, days) => {
+    try {
+      const { data: { user: u } } = await supabase.auth.getUser()
+      await supabase.from('user_profile').upsert({
+        user_id: u.id,
+        notif_enabled: enabled,
+        notif_time: time,
+        notif_inactivity_days: days,
+      }, { onConflict: 'user_id' })
+    } catch {}
+  }
+  const [notifEnabled, setNotifEnabled] = useState(false)
+  const [notifTime, setNotifTime] = useState('18:00')
+  const [notifInactivityDays, setNotifInactivityDays] = useState(2)
 
   const handleLogout = async () => {
     try {
@@ -378,6 +413,67 @@ export default function ProfilePage() {
         </div>
 
         <Medals />
+
+        {/* Notifications */}
+        {pushSupported && (
+          <div className="bg-gray-900 rounded-2xl p-5 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {subscribed ? <Bell size={16} className="text-indigo-400" /> : <BellOff size={16} className="text-gray-500" />}
+                <h2 className="text-white font-semibold">Notifications</h2>
+              </div>
+              <button
+                onClick={handleToggleNotif}
+                disabled={pushLoading}
+                className={`relative w-12 h-6 rounded-full transition-colors ${subscribed ? 'bg-indigo-600' : 'bg-gray-700'} disabled:opacity-50`}
+              >
+                <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${subscribed ? 'translate-x-6' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+
+            {subscribed && (
+              <>
+                <div>
+                  <label className="text-gray-400 text-xs mb-1.5 block">Heure du rappel quotidien</label>
+                  <input
+                    type="time"
+                    value={notifTime}
+                    onChange={e => {
+                      setNotifTime(e.target.value)
+                      saveNotifSettings(true, e.target.value, notifInactivityDays)
+                    }}
+                    className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs mb-1.5 block">
+                    Rappel si inactif depuis {notifInactivityDays} jour{notifInactivityDays > 1 ? 's' : ''}
+                  </label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 5, 7].map(d => (
+                      <button
+                        key={d}
+                        onClick={() => {
+                          setNotifInactivityDays(d)
+                          saveNotifSettings(true, notifTime, d)
+                        }}
+                        className={`flex-1 py-2 rounded-xl text-sm transition-colors ${notifInactivityDays === d ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}
+                      >
+                        {d}j
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {!subscribed && (
+              <p className="text-gray-500 text-xs leading-relaxed">
+                Active les notifications pour recevoir des rappels d'entraînement et des alertes si tu n'as pas entraîné depuis plusieurs jours.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Déconnexion */}
         <button

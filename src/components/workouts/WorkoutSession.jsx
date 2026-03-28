@@ -200,6 +200,17 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
     }
 
     toast.success('Séance enregistrée !')
+
+    // Notification locale de fin de séance
+    if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready
+      reg.showNotification('Séance terminée ! 💪', {
+        body: `${allSets.length} série${allSets.length > 1 ? 's' : ''} complétée${allSets.length > 1 ? 's' : ''}. Excellent travail !`,
+        icon: '/icon-192.png',
+        tag: 'workout-done',
+      })
+    }
+
     setSaving(false)
     onDone()
   }
