@@ -21,43 +21,28 @@ export default function ProgressTab() {
     const fetchExercises = async () => {
       try {
         const { data: { user }, error: userError } = await supabase.auth.getUser()
-        if (userError) {
-          console.error("Erreur récupération user :", userError)
-          return
-        }
-        console.log("Utilisateur :", user)
+        if (userError) return
 
-        // Récupère les sessions de l'utilisateur
         const { data: sessions, error: sessionsError } = await supabase
           .from('workout_sessions')
           .select('id')
           .eq('user_id', user.id)
 
-        if (sessionsError) {
-          console.error("Erreur récupération sessions :", sessionsError)
-          return
-        }
-        console.log("Sessions trouvées :", sessions)
+        if (sessionsError) return
 
         const sessionIds = sessions.map(s => s.id)
         if (sessionIds.length === 0) {
-          console.log("Aucune session pour cet utilisateur")
           setExercises([])
           setLoading(false)
           return
         }
 
-        // Récupère les sets pour ces sessions
         const { data: exerciseSets, error: setsError } = await supabase
           .from('session_sets')
           .select('exercise_id, exercises(name)')
           .in('session_id', sessionIds)
 
-        if (setsError) {
-          console.error("Erreur récupération session_sets :", setsError)
-          return
-        }
-        console.log("session_sets trouvés :", exerciseSets)
+        if (setsError) return
 
         // Récupération unique des exercices
         const unique = []
@@ -70,8 +55,8 @@ export default function ProgressTab() {
         })
         setExercises(unique.sort((a, b) => a.name.localeCompare(b.name)))
         if (unique.length > 0) setSelected(unique[0])
-      } catch (err) {
-        console.error("Erreur fetchExercises :", err)
+      } catch {
+        // silently handled
       } finally {
         setLoading(false)
       }
@@ -99,8 +84,6 @@ export default function ProgressTab() {
           .order('logged_at', { ascending: true })
 
         if (progressError) throw progressError
-
-        console.log("Données progression :", progressSets)
 
         if (progressSets && progressSets.length > 0) {
           // Regrouper par session_id
@@ -136,8 +119,8 @@ export default function ProgressTab() {
           setChartData([])
           setStats(null)
         }
-      } catch (err) {
-        console.error("Erreur fetchProgress :", err)
+      } catch {
+        // silently handled
       } finally {
         setLoadingChart(false)
       }
@@ -146,7 +129,11 @@ export default function ProgressTab() {
   }, [selected])
 
   // 🔹 Rendu
-  if (loading) return <p className="text-gray-400 px-4">Chargement...</p>
+  if (loading) return (
+    <div className="flex justify-center py-12">
+      <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
 
   if (exercises.length === 0)
     return (
@@ -181,7 +168,9 @@ export default function ProgressTab() {
 
       {/* Affichage graphique ou message */}
       {loadingChart ? (
-        <p className="text-gray-400 text-sm">Chargement...</p>
+        <div className="flex justify-center py-8">
+          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        </div>
       ) : chartData.length < 2 ? (
         <div className="bg-gray-900 rounded-2xl p-5">
           <p className="text-gray-500 text-sm text-center py-4">
@@ -304,15 +293,13 @@ export default function ProgressTab() {
                       const sessionIds = sessions.map(s => s.id)
 
                       // Supprimer les sets pour cet exercice et ces sessions
-                      const { data: deletedSets, error: deleteError } = await supabase
+                      const { error: deleteError } = await supabase
                         .from('session_sets')
                         .delete()
                         .in('session_id', sessionIds)
                         .eq('exercise_id', selected.id)
 
                       if (deleteError) throw deleteError
-
-                      console.log("Progression supprimée :", deletedSets)
 
                       // Mettre à jour l'état local
                       setChartData([])

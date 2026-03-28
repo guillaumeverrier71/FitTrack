@@ -40,7 +40,7 @@ export default function App() {
 
   if (session === undefined) return (
     <div className="h-screen flex items-center justify-center bg-gray-950">
-      <p className="text-white">Chargement...</p>
+      <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
     </div>
   )
 

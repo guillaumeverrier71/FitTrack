@@ -160,13 +160,20 @@ export default function ProfilePage() {
   const handleToggleNotif = async () => {
     if (!subscribed) {
       const ok = await subscribe()
-      if (!ok) return
+      if (!ok) {
+        if (Notification.permission === 'denied') {
+          toast.error('Notifications bloquées. Autorise-les dans les paramètres du navigateur (cadenas dans la barre d\'adresse).')
+        }
+        return
+      }
       setNotifEnabled(true)
       await saveNotifSettings(true, notifTime, notifInactivityDays)
+      toast.success('Notifications activées !')
     } else {
       await unsubscribe()
       setNotifEnabled(false)
       await saveNotifSettings(false, notifTime, notifInactivityDays)
+      toast.info('Notifications désactivées.')
     }
   }
 
@@ -195,7 +202,7 @@ export default function ProfilePage() {
 
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-gray-950">
-      <p className="text-white">Chargement...</p>
+      <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
     </div>
   )
 

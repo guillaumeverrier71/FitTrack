@@ -106,7 +106,7 @@ function SessionCard({ session }) {
       {open && (
         <div className="border-t border-gray-800 px-4 pb-4">
           {loading ? (
-            <p className="text-gray-500 text-sm py-3">Chargement...</p>
+            <div className="flex justify-center py-3"><div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>
           ) : grouped.length === 0 ? (
             <p className="text-gray-500 text-sm py-3">Aucune série enregistrée</p>
           ) : (
@@ -165,7 +165,11 @@ export default function HistoryTab() {
   }, [])
 
   if (loading) {
-    return <p className="text-gray-400 text-center mt-10">Chargement...</p>
+    return (
+      <div className="flex justify-center py-12">
+        <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
   }
 
   if (sessions.length === 0) {

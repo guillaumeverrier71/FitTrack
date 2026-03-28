@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Plus, Trash2, Flame, Target, X, Settings2, PenLine } from 'lucide-react'
+import { Plus, Trash2, Flame, Target, X, Settings2, PenLine, Copy } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import FoodSearch from '../../components/nutrition/FoodSearch'
+import ConfirmModal from '../../components/ui/ConfirmModal'
 import { useToast } from '../../context/ToastContext'
 import { handleSupabaseError } from '../../lib/handleError'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
@@ -58,6 +59,8 @@ export default function NutritionPage() {
   const [actCals, setActCals] = useState('')
   const [actDuration, setActDuration] = useState('')
 
+  const [confirmDelete, setConfirmDelete] = useState(null) // { id, type: 'meal' | 'activity' }
+  const [copyingYesterday, setCopyingYesterday] = useState(false)
   const [showManualForm, setShowManualForm] = useState(false)
   const [manualCat, setManualCat] = useState('déjeuner')
   const [manName, setManName] = useState('')
@@ -260,49 +263,81 @@ export default function NutritionPage() {
     }
   }
 
-  const handleDeleteMeal = async (id) => {
-    if (id.toString().startsWith('offline_')) {
-      const meal = meals.find(m => m.id === id)
-      if (meal?._queueId) offlineQueue.remove(meal._queueId)
-      setMeals(prev => prev.filter(m => m.id !== id))
-      return
-    }
-    if (!isOnline) {
-      offlineQueue.add('delete', 'meal_entries', null, { match: { id } })
-      setMeals(prev => prev.filter(m => m.id !== id))
-      return
-    }
-    try {
-      await supabase.from('meal_entries').delete().eq('id', id)
-      fetchData()
-    } catch (err) {
-      await handleSupabaseError(err, toast, 'Erreur lors de la suppression.')
+  const confirmDeleteAndExecute = async () => {
+    if (!confirmDelete) return
+    const { id, type } = confirmDelete
+    setConfirmDelete(null)
+
+    if (type === 'meal') {
+      if (id.toString().startsWith('offline_')) {
+        const meal = meals.find(m => m.id === id)
+        if (meal?._queueId) offlineQueue.remove(meal._queueId)
+        setMeals(prev => prev.filter(m => m.id !== id))
+        return
+      }
+      if (!isOnline) {
+        offlineQueue.add('delete', 'meal_entries', null, { match: { id } })
+        setMeals(prev => prev.filter(m => m.id !== id))
+        return
+      }
+      try {
+        await supabase.from('meal_entries').delete().eq('id', id)
+        fetchData()
+      } catch (err) {
+        await handleSupabaseError(err, toast, 'Erreur lors de la suppression.')
+      }
+    } else {
+      if (id.toString().startsWith('offline_')) {
+        const act = activities.find(a => a.id === id)
+        if (act?._queueId) offlineQueue.remove(act._queueId)
+        setActivities(prev => prev.filter(a => a.id !== id))
+        return
+      }
+      if (!isOnline) {
+        offlineQueue.add('delete', 'activity_entries', null, { match: { id } })
+        setActivities(prev => prev.filter(a => a.id !== id))
+        return
+      }
+      try {
+        await supabase.from('activity_entries').delete().eq('id', id)
+        fetchData()
+      } catch (err) {
+        await handleSupabaseError(err, toast, 'Erreur lors de la suppression.')
+      }
     }
   }
 
-  const handleDeleteActivity = async (id) => {
-    if (id.toString().startsWith('offline_')) {
-      const act = activities.find(a => a.id === id)
-      if (act?._queueId) offlineQueue.remove(act._queueId)
-      setActivities(prev => prev.filter(a => a.id !== id))
-      return
-    }
-    if (!isOnline) {
-      offlineQueue.add('delete', 'activity_entries', null, { match: { id } })
-      setActivities(prev => prev.filter(a => a.id !== id))
-      return
-    }
+  const handleCopyYesterday = async () => {
+    setCopyingYesterday(true)
     try {
-      await supabase.from('activity_entries').delete().eq('id', id)
+      const { data: { user } } = await supabase.auth.getUser()
+      const yesterday = new Date()
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yesterdayStr = yesterday.toISOString().split('T')[0]
+      const { data: yesterdayMeals } = await supabase
+        .from('meal_entries')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('date', yesterdayStr)
+      if (!yesterdayMeals?.length) {
+        toast.info('Aucun repas hier à copier.')
+        return
+      }
+      await supabase.from('meal_entries').insert(
+        yesterdayMeals.map(({ id, created_at, ...m }) => ({ ...m, date: getToday() }))
+      )
+      toast.success(`${yesterdayMeals.length} repas copiés depuis hier !`)
       fetchData()
     } catch (err) {
-      await handleSupabaseError(err, toast, 'Erreur lors de la suppression.')
+      await handleSupabaseError(err, toast, 'Erreur lors de la copie.')
+    } finally {
+      setCopyingYesterday(false)
     }
   }
 
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-gray-950">
-      <p className="text-white">Chargement...</p>
+      <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
     </div>
   )
 
@@ -315,6 +350,11 @@ export default function NutritionPage() {
 
   const tdee = calculateTDEE({ ...profile, current_weight: currentWeight })
   const calorieGoal = profile?.calorie_goal || tdee
+  const macroGoals = calorieGoal ? {
+    proteins: Math.round(calorieGoal * 0.30 / 4),
+    carbs: Math.round(calorieGoal * 0.45 / 4),
+    fats: Math.round(calorieGoal * 0.25 / 9),
+  } : null
 
   const byCategory = CATEGORIES.map(cat => ({
     cat,
@@ -369,25 +409,42 @@ export default function NutritionPage() {
           </>
         )}
 
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-gray-800 rounded-xl p-2 text-center">
-            <p className="text-blue-400 font-bold text-sm">{totalProteins}g</p>
-            <p className="text-gray-500 text-xs">Protéines</p>
-          </div>
-          <div className="bg-gray-800 rounded-xl p-2 text-center">
-            <p className="text-yellow-400 font-bold text-sm">{totalCarbs}g</p>
-            <p className="text-gray-500 text-xs">Glucides</p>
-          </div>
-          <div className="bg-gray-800 rounded-xl p-2 text-center">
-            <p className="text-red-400 font-bold text-sm">{totalFats}g</p>
-            <p className="text-gray-500 text-xs">Lipides</p>
-          </div>
+        <div className="flex flex-col gap-2">
+          {[
+            { label: 'Protéines', value: totalProteins, goal: macroGoals?.proteins, color: 'bg-blue-500', text: 'text-blue-400' },
+            { label: 'Glucides', value: totalCarbs, goal: macroGoals?.carbs, color: 'bg-yellow-500', text: 'text-yellow-400' },
+            { label: 'Lipides', value: totalFats, goal: macroGoals?.fats, color: 'bg-red-500', text: 'text-red-400' },
+          ].map(({ label, value, goal, color, text }) => (
+            <div key={label} className="bg-gray-800 rounded-xl px-3 py-2">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-gray-400 text-xs">{label}</span>
+                <span className={`${text} text-xs font-medium`}>
+                  {value}g{goal ? ` / ${goal}g` : ''}
+                </span>
+              </div>
+              {goal ? (
+                <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                  <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${Math.min((value / goal) * 100, 100)}%` }} />
+                </div>
+              ) : null}
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Repas par catégorie */}
       <div className="bg-gray-900 rounded-2xl p-5 flex flex-col gap-4">
-        <h2 className="text-white font-semibold">Repas</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-white font-semibold">Repas</h2>
+          <button
+            onClick={handleCopyYesterday}
+            disabled={copyingYesterday}
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <Copy size={13} />
+            {copyingYesterday ? 'Copie...' : 'Copier hier'}
+          </button>
+        </div>
         {byCategory.map(({ cat, total, items }) => (
           <div key={cat}>
             <div className="flex items-center justify-between mb-2">
@@ -418,7 +475,7 @@ export default function NutritionPage() {
                       <span className="text-white text-sm">{meal.name}</span>
                       <div className="flex items-center gap-3">
                         <span className="text-orange-400 text-sm font-medium">{meal.calories} kcal</span>
-                        <button onClick={() => handleDeleteMeal(meal.id)} className="text-gray-500 hover:text-red-400 transition-colors">
+                        <button onClick={() => setConfirmDelete({ id: meal.id, type: 'meal' })} className="text-gray-500 hover:text-red-400 transition-colors">
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -463,7 +520,7 @@ export default function NutritionPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-green-400 text-sm font-medium">-{act.calories_burned} kcal</span>
-                  <button onClick={() => handleDeleteActivity(act.id)} className="text-gray-500 hover:text-red-400 transition-colors">
+                  <button onClick={() => setConfirmDelete({ id: act.id, type: 'activity' })} className="text-gray-500 hover:text-red-400 transition-colors">
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -598,6 +655,16 @@ export default function NutritionPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title={confirmDelete.type === 'meal' ? 'Supprimer ce repas ?' : 'Supprimer cette activité ?'}
+          description="Cette action est irréversible."
+          confirmLabel="Supprimer"
+          onConfirm={confirmDeleteAndExecute}
+          onCancel={() => setConfirmDelete(null)}
+        />
       )}
 
       {/* Modal objectif calorique */}

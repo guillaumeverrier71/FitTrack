@@ -149,10 +149,14 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
   }
 
   const addSet = (exerciseId) => {
-    setSets(prev => ({
-      ...prev,
-      [exerciseId]: [...prev[exerciseId], { reps: 10, weight: 0, done: false }]
-    }))
+    setSets(prev => {
+      const existing = prev[exerciseId] || []
+      const lastSet = existing[existing.length - 1]
+      return {
+        ...prev,
+        [exerciseId]: [...existing, { reps: lastSet?.reps || 10, weight: lastSet?.weight || 0, done: false }]
+      }
+    })
   }
 
   const skipRest = () => setRestTimer(prev => ({ ...prev, active: false }))

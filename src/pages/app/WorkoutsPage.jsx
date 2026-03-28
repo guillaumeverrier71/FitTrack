@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { useWorkouts } from '../../hooks/useWorkouts'
 import { useSession } from '../../context/SessionContext'
 import TemplateCard from '../../components/workouts/TemplateCard'
@@ -12,6 +12,14 @@ export default function WorkoutsPage() {
   const { startSession } = useSession()
   const [showCreate, setShowCreate] = useState(false)
   const [tab, setTab] = useState('seances')
+  const [search, setSearch] = useState('')
+
+  const filteredTemplates = search.trim()
+    ? templates.filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
+    : templates
+  const filteredDefaults = search.trim()
+    ? defaultTemplates.filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
+    : defaultTemplates
 
   return (
     <div className="pb-24 bg-gray-950 min-h-screen">
@@ -46,15 +54,30 @@ export default function WorkoutsPage() {
       {tab === 'seances' ? (
         <div className="px-4 flex flex-col gap-3">
           {loading ? (
-            <p className="text-gray-400">Chargement...</p>
+            <div className="flex justify-center py-12">
+              <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            </div>
           ) : (
             <>
-              {templates.length > 0 && (
+              {(templates.length > 0 || defaultTemplates.length > 0) && (
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="Rechercher une séance..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="bg-gray-900 text-white rounded-xl pl-9 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500 w-full text-sm placeholder-gray-500"
+                  />
+                </div>
+              )}
+
+              {filteredTemplates.length > 0 && (
                 <div className="flex flex-col gap-3">
                   {defaultTemplates.length > 0 && (
                     <p className="text-gray-500 text-xs font-medium uppercase tracking-wider">Mes séances</p>
                   )}
-                  {templates.map(template => (
+                  {filteredTemplates.map(template => (
                     <TemplateCard
                       key={template.id}
                       template={template}
@@ -66,10 +89,10 @@ export default function WorkoutsPage() {
                 </div>
               )}
 
-              {defaultTemplates.length > 0 && (
+              {filteredDefaults.length > 0 && (
                 <div className="flex flex-col gap-3">
                   <p className="text-gray-500 text-xs font-medium uppercase tracking-wider mt-1">Séances types</p>
-                  {defaultTemplates.map(template => (
+                  {filteredDefaults.map(template => (
                     <TemplateCard
                       key={template.id}
                       template={template}
@@ -79,6 +102,10 @@ export default function WorkoutsPage() {
                     />
                   ))}
                 </div>
+              )}
+
+              {search.trim() && filteredTemplates.length === 0 && filteredDefaults.length === 0 && (
+                <p className="text-gray-500 text-sm text-center py-8">Aucune séance trouvée pour "{search}"</p>
               )}
 
               {templates.length === 0 && defaultTemplates.length === 0 && (
