@@ -412,17 +412,6 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* Déconnexion */}
-        <button
-          onClick={() => setConfirmLogout(true)}
-          className="flex items-center justify-center gap-2 w-full bg-gray-900 hover:bg-red-950 text-red-400 font-semibold py-4 rounded-2xl transition-colors"
-        >
-          <LogOut size={18} />
-          Se déconnecter
-        </button>
-
-        <Medals />
-
         {/* Notifications */}
         {pushSupported && (
           <div className="bg-gray-900 rounded-2xl p-5 flex flex-col gap-4">
@@ -483,6 +472,17 @@ export default function ProfilePage() {
             )}
           </div>
         )}
+
+        <Medals />
+
+        {/* Déconnexion */}
+        <button
+          onClick={() => setConfirmLogout(true)}
+          className="flex items-center justify-center gap-2 w-full bg-gray-900 hover:bg-red-950 text-red-400 font-semibold py-4 rounded-2xl transition-colors"
+        >
+          <LogOut size={18} />
+          Se déconnecter
+        </button>
 
       </div>
 
