@@ -99,7 +99,7 @@ export default function DashboardPage() {
         .select('*')
         .eq('user_id', user.id)
         .eq('date', getToday())
-        .single()
+        .maybeSingle()
       setSteps(stepsData)
 
       // Dernière séance
