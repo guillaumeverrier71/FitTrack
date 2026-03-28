@@ -79,7 +79,6 @@ export default function FoodSearch({ category, onAdd, onClose }) {
         .select('food_id, foods(id, name, calories_per_100g, proteins_per_100g, carbs_per_100g, fats_per_100g, unit)')
         .eq('user_id', user.id)
         .not('food_id', 'is', null)
-        .order('created_at', { ascending: false })
         .limit(10)
 
       if (data) {
