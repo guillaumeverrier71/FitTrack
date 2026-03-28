@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Plus, Trash2 } from 'lucide-react'
+import { X, Plus, Trash2, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 export default function CreateTemplateModal({ onClose, onCreated }) {
@@ -9,6 +9,7 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
   const [muscleGroups, setMuscleGroups] = useState([])
   const [selectedGroup, setSelectedGroup] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     const fetchExercises = async () => {
@@ -21,7 +22,11 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
     fetchExercises()
   }, [])
 
-  const filteredExercises = allExercises.filter(e => e.muscle_group_id === selectedGroup)
+  const filteredExercises = allExercises.filter(e =>
+    search.trim()
+      ? e.name.toLowerCase().includes(search.toLowerCase())
+      : e.muscle_group_id === selectedGroup
+  )
 
   const addExercise = (exo) => {
     if (exercises.find(e => e.exercise_id === exo.id)) return
@@ -134,6 +139,18 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
           {/* Bibliothèque */}
           <div className="flex flex-col gap-3">
             <h3 className="text-gray-400 text-sm font-medium">Ajouter des exercices</h3>
+
+            {/* Recherche */}
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Rechercher un exercice..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="bg-gray-800 text-white rounded-xl pl-9 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500 w-full text-sm placeholder-gray-500"
+              />
+            </div>
 
             {/* Filtre groupe musculaire */}
             <div className="flex gap-2 overflow-x-auto pb-1">
