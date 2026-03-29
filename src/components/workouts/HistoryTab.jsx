@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { ChevronDown, ChevronRight, Dumbbell, Clock } from 'lucide-react'
+import { ChevronDown, ChevronRight, Dumbbell, Clock, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import ConfirmModal from '../ui/ConfirmModal'
 
 function formatDate(dateStr) {
   const todayStr = new Date().toISOString().split('T')[0]
@@ -145,6 +146,13 @@ function SessionCard({ session }) {
 export default function HistoryTab() {
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [confirmClear, setConfirmClear] = useState(false)
+
+  const handleClearHistory = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('workout_sessions').delete().eq('user_id', user.id).not('finished_at', 'is', null)
+    setSessions([])
+  }
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -196,6 +204,13 @@ export default function HistoryTab() {
 
   return (
     <div className="px-4 pb-4 flex flex-col gap-4">
+      <div className="flex justify-end">
+        <button onClick={() => setConfirmClear(true)}
+          className="flex items-center gap-1.5 text-red-400 text-xs px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors">
+          <Trash2 size={13} />
+          Supprimer l'historique
+        </button>
+      </div>
       {byDay.map(({ date, sessions: daySessions }) => (
         <div key={date}>
           <p className="text-gray-500 text-xs font-medium capitalize tracking-wider mb-2">
@@ -206,6 +221,15 @@ export default function HistoryTab() {
           </div>
         </div>
       ))}
+      <ConfirmModal
+        open={confirmClear}
+        title="Supprimer l'historique"
+        message="Toutes tes séances terminées seront supprimées définitivement. Cette action est irréversible."
+        confirmLabel="Supprimer"
+        variant="danger"
+        onConfirm={() => { setConfirmClear(false); handleClearHistory() }}
+        onCancel={() => setConfirmClear(false)}
+      />
     </div>
   )
 }

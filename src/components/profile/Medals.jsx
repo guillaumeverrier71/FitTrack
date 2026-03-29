@@ -107,7 +107,7 @@ export default function Medals() {
         { data: weightEntries },
         { data: setsData },
         { data: allSets },
-        { data: mealEntries },
+        { count: mealCount },
       ] = await Promise.all([
         supabase.from('workout_sessions').select('*', { count: 'exact', head: true }).eq('user_id', user.id).not('finished_at', 'is', null),
         supabase.from('workout_sessions').select('finished_at').eq('user_id', user.id).not('finished_at', 'is', null).order('finished_at', { ascending: false }),
@@ -116,7 +116,7 @@ export default function Medals() {
         supabase.from('weight_entries').select('weight_kg').eq('user_id', user.id).order('date', { ascending: false }),
         supabase.from('session_sets').select('weight_kg, reps, workout_sessions!inner(user_id)').eq('workout_sessions.user_id', user.id),
         supabase.from('session_sets').select('exercise_id, weight_kg, logged_at, workout_sessions!inner(user_id)').eq('workout_sessions.user_id', user.id).order('logged_at', { ascending: true }),
-        supabase.from('meal_entries').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('meal_entries').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
       ])
 
       // Streak
@@ -161,7 +161,7 @@ export default function Medals() {
         weightGoalReached,
         totalVolume,
         recordBeaten,
-        meals: mealEntries?.length || 0,
+        meals: mealCount || 0,
         weightEntries: weightEntries?.length || 0,
       }
 
@@ -172,11 +172,12 @@ export default function Medals() {
       const nowUnlocked = MEDALS.filter(m => m.check(computedStats))
       const newOnes = nowUnlocked.filter(m => !seenIds.includes(m.id))
 
+      // On ne réduit jamais la liste vue — on accumule pour éviter les re-déclenchements
+      const updatedSeen = [...new Set([...seenIds, ...nowUnlocked.map(m => m.id)])]
+      localStorage.setItem(seenKey, JSON.stringify(updatedSeen))
+
       if (newOnes.length > 0) {
         setNewMedalsQueue(newOnes)
-        localStorage.setItem(seenKey, JSON.stringify(nowUnlocked.map(m => m.id)))
-      } else {
-        localStorage.setItem(seenKey, JSON.stringify(nowUnlocked.map(m => m.id)))
       }
     }
     fetchStats()
