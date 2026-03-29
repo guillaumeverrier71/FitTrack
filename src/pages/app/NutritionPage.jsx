@@ -72,6 +72,9 @@ export default function NutritionPage() {
   const [profGender, setProfGender] = useState('homme')
   const [profActivity, setProfActivity] = useState('modere')
   const [profGoalCals, setProfGoalCals] = useState('')
+  const [profProteinsGoal, setProfProteinsGoal] = useState('')
+  const [profCarbsGoal, setProfCarbsGoal] = useState('')
+  const [profFatsGoal, setProfFatsGoal] = useState('')
 
   const fetchData = async () => {
     try {
@@ -100,6 +103,9 @@ export default function NutritionPage() {
       setProfGender(profileData?.gender || 'homme')
       setProfActivity(profileData?.activity_level || 'modere')
       setProfGoalCals(profileData?.calorie_goal?.toString() || '')
+      setProfProteinsGoal(profileData?.proteins_goal_g?.toString() || '')
+      setProfCarbsGoal(profileData?.carbs_goal_g?.toString() || '')
+      setProfFatsGoal(profileData?.fats_goal_g?.toString() || '')
 
       const dates = []
       for (let i = 6; i >= 0; i--) {
@@ -231,6 +237,9 @@ export default function NutritionPage() {
         gender: profGender,
         activity_level: profActivity,
         calorie_goal: profGoalCals ? parseInt(profGoalCals) : tdee,
+        proteins_goal_g: profProteinsGoal ? parseInt(profProteinsGoal) : null,
+        carbs_goal_g: profCarbsGoal ? parseInt(profCarbsGoal) : null,
+        fats_goal_g: profFatsGoal ? parseInt(profFatsGoal) : null,
       }, { onConflict: 'user_id' })
       setShowProfileForm(false)
       toast.success('Objectif mis à jour !')
@@ -350,10 +359,10 @@ export default function NutritionPage() {
 
   const tdee = calculateTDEE({ ...profile, current_weight: currentWeight })
   const calorieGoal = profile?.calorie_goal || tdee
-  const macroGoals = calorieGoal ? {
-    proteins: Math.round(calorieGoal * 0.30 / 4),
-    carbs: Math.round(calorieGoal * 0.45 / 4),
-    fats: Math.round(calorieGoal * 0.25 / 9),
+  const macroGoals = (calorieGoal || profile?.proteins_goal_g) ? {
+    proteins: profile?.proteins_goal_g || Math.round(calorieGoal * 0.30 / 4),
+    carbs: profile?.carbs_goal_g || Math.round(calorieGoal * 0.45 / 4),
+    fats: profile?.fats_goal_g || Math.round(calorieGoal * 0.25 / 9),
   } : null
 
   const byCategory = CATEGORIES.map(cat => ({
@@ -704,9 +713,29 @@ export default function NutritionPage() {
               </div>
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-1 block">Objectif manuel (optionnel)</label>
+              <label className="text-gray-400 text-xs mb-1 block">Objectif calorique manuel (optionnel)</label>
               <input type="number" value={profGoalCals} onChange={e => setProfGoalCals(e.target.value)} placeholder="ex: 2200"
                 className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full" />
+            </div>
+            <div>
+              <label className="text-gray-400 text-xs mb-2 block">Objectifs macros (optionnel — sinon calculé depuis les calories)</label>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-blue-400 text-xs mb-1 block">Protéines (g)</label>
+                  <input type="number" value={profProteinsGoal} onChange={e => setProfProteinsGoal(e.target.value)} placeholder="ex: 150"
+                    className="bg-gray-800 text-white rounded-xl px-3 py-3 outline-none focus:ring-2 focus:ring-blue-500 w-full text-sm" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-yellow-400 text-xs mb-1 block">Glucides (g)</label>
+                  <input type="number" value={profCarbsGoal} onChange={e => setProfCarbsGoal(e.target.value)} placeholder="ex: 250"
+                    className="bg-gray-800 text-white rounded-xl px-3 py-3 outline-none focus:ring-2 focus:ring-yellow-500 w-full text-sm" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-red-400 text-xs mb-1 block">Lipides (g)</label>
+                  <input type="number" value={profFatsGoal} onChange={e => setProfFatsGoal(e.target.value)} placeholder="ex: 70"
+                    className="bg-gray-800 text-white rounded-xl px-3 py-3 outline-none focus:ring-2 focus:ring-red-500 w-full text-sm" />
+                </div>
+              </div>
             </div>
             {profAge && profile?.height_cm && profile?.weight_goal_kg && (
               <div className="bg-indigo-950 rounded-xl p-3">
