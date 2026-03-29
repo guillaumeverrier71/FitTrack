@@ -4,6 +4,7 @@ import { cache } from '../../lib/cache'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { useToast } from '../../context/ToastContext'
 import { handleSupabaseError } from '../../lib/handleError'
+import { useLang } from '../../context/LangContext'
 import { Footprints, Dumbbell, Flame, Scale, Zap, CalendarDays } from 'lucide-react'
 
 
@@ -20,19 +21,12 @@ function getMondayOfWeek() {
   return monday.toISOString().split('T')[0]
 }
 
-function timeAgo(dateStr) {
-  if (!dateStr) return null
-  const diff = Math.floor((new Date() - new Date(dateStr)) / 1000 / 60)
-  if (diff < 60) return `Il y a ${diff} min`
-  if (diff < 1440) return `Il y a ${Math.floor(diff / 60)}h`
-  return `Il y a ${Math.floor(diff / 1440)} jour(s)`
-}
-
 const CACHE_KEY = 'dashboard'
 
 export default function DashboardPage() {
   const toast = useToast()
   const isOnline = useOnlineStatus()
+  const { t, lang } = useLang()
   const [user, setUser] = useState(null)
   const [steps, setSteps] = useState(null)
   const [lastSession, setLastSession] = useState(null)
@@ -42,6 +36,16 @@ export default function DashboardPage() {
   const [caloriesData, setCaloriesData] = useState(null)
   const [weekSummary, setWeekSummary] = useState(null)
   const [fromCache, setFromCache] = useState(false)
+
+  const locale = lang === 'fr' ? 'fr-FR' : 'en-US'
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return null
+    const diff = Math.floor((new Date() - new Date(dateStr)) / 1000 / 60)
+    if (diff < 60) return t('dashboard.timeAgoMin', { n: diff })
+    if (diff < 1440) return t('dashboard.timeAgoH', { n: Math.floor(diff / 60) })
+    return t('dashboard.timeAgoDays', { n: Math.floor(diff / 1440) })
+  }
 
   useEffect(() => {
     // Offline : charger depuis le cache
@@ -231,7 +235,7 @@ export default function DashboardPage() {
   const stepsProgress = steps ? Math.min((steps.steps / steps.goal) * 100, 100) : 0
   const firstName = user?.user_metadata?.full_name?.split(' ')[0] || 'Toi'
   const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'
+  const greeting = hour < 12 ? t('dashboard.greetingMorning') : hour < 18 ? t('dashboard.greetingAfternoon') : t('dashboard.greetingEvening')
 
   return (
     <div className="p-4 pb-24 bg-gray-950 min-h-screen flex flex-col gap-4">
@@ -240,7 +244,7 @@ export default function DashboardPage() {
       <div className="pt-2">
         <h1 className="text-2xl font-bold text-white">{greeting} {firstName} 👋</h1>
         <p className="text-gray-400 text-sm mt-1">
-          {fromCache ? 'Données en cache — reconnecte-toi pour actualiser' : 'Voilà où t\'en es aujourd\'hui'}
+          {fromCache ? t('dashboard.fromCache') : t('dashboard.subtitle')}
         </p>
       </div>
 
@@ -249,8 +253,10 @@ export default function DashboardPage() {
         <div className="bg-gradient-to-r from-orange-600 to-orange-500 rounded-2xl p-4 flex items-center gap-3">
           <Zap size={28} className="text-white" fill="white" />
           <div>
-            <p className="text-white font-bold text-lg">{streak} jour{streak > 1 ? 's' : ''} de streak 🔥</p>
-            <p className="text-orange-100 text-sm">Continue comme ça !</p>
+            <p className="text-white font-bold text-lg">
+              {t('dashboard.streakCard', { n: streak, s: streak > 1 ? 's' : '' })}
+            </p>
+            <p className="text-orange-100 text-sm">{t('dashboard.streakMotiv')}</p>
           </div>
         </div>
       )}
@@ -260,24 +266,26 @@ export default function DashboardPage() {
         <div className="bg-gray-900 rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <CalendarDays size={18} className="text-indigo-400" />
-            <span className="text-gray-400 text-sm">Cette semaine</span>
+            <span className="text-gray-400 text-sm">{t('dashboard.thisWeek')}</span>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-gray-800 rounded-xl p-3 text-center">
               <p className="text-white font-bold text-2xl">{weekSummary.sessions}</p>
-              <p className="text-gray-500 text-xs mt-1">séance{weekSummary.sessions > 1 ? 's' : ''}</p>
+              <p className="text-gray-500 text-xs mt-1">
+                {t('dashboard.weekSessions', { s: weekSummary.sessions > 1 ? 's' : '' })}
+              </p>
             </div>
             <div className="bg-gray-800 rounded-xl p-3 text-center">
               <p className="text-white font-bold text-2xl">
                 {weekSummary.avgCals !== null ? weekSummary.avgCals : '—'}
               </p>
-              <p className="text-gray-500 text-xs mt-1">kcal/j moy.</p>
+              <p className="text-gray-500 text-xs mt-1">{t('dashboard.weekAvgCals')}</p>
             </div>
             <div className="bg-gray-800 rounded-xl p-3 text-center">
               <p className="text-white font-bold text-2xl">
-                {weekSummary.avgSteps !== null ? weekSummary.avgSteps.toLocaleString('fr-FR') : '—'}
+                {weekSummary.avgSteps !== null ? weekSummary.avgSteps.toLocaleString(locale) : '—'}
               </p>
-              <p className="text-gray-500 text-xs mt-1">pas/j moy.</p>
+              <p className="text-gray-500 text-xs mt-1">{t('dashboard.weekAvgSteps')}</p>
             </div>
           </div>
         </div>
@@ -287,15 +295,15 @@ export default function DashboardPage() {
       <div className="bg-gray-900 rounded-2xl p-5">
         <div className="flex items-center gap-2 mb-3">
           <Footprints size={18} className="text-indigo-400" />
-          <span className="text-gray-400 text-sm">Pas aujourd'hui</span>
+          <span className="text-gray-400 text-sm">{t('dashboard.stepsToday')}</span>
         </div>
         {steps ? (
           <>
             <div className="flex items-end gap-2 mb-3">
               <span className="text-4xl font-bold text-white">
-                {steps.steps.toLocaleString('fr-FR')}
+                {steps.steps.toLocaleString(locale)}
               </span>
-              <span className="text-gray-400 mb-1 text-sm">/ {steps.goal.toLocaleString('fr-FR')}</span>
+              <span className="text-gray-400 mb-1 text-sm">/ {steps.goal.toLocaleString(locale)}</span>
             </div>
             <div className="w-full bg-gray-800 rounded-full h-2 mb-3">
               <div
@@ -305,13 +313,13 @@ export default function DashboardPage() {
             </div>
             <p className="text-gray-400 text-sm">
               {stepsProgress >= 100
-                ? '✅ Objectif atteint !'
-                : `${Math.round(stepsProgress)}% — encore ${(steps.goal - steps.steps).toLocaleString('fr-FR')} pas`
+                ? t('dashboard.stepsGoalReached')
+                : t('dashboard.stepsProgress', { pct: Math.round(stepsProgress), remaining: (steps.goal - steps.steps).toLocaleString(locale) })
               }
             </p>
           </>
         ) : (
-          <p className="text-gray-500 text-sm">Aucun pas enregistré aujourd'hui</p>
+          <p className="text-gray-500 text-sm">{t('dashboard.noSteps')}</p>
         )}
       </div>
 
@@ -319,7 +327,7 @@ export default function DashboardPage() {
       <div className="bg-gray-900 rounded-2xl p-5">
         <div className="flex items-center gap-2 mb-3">
           <Dumbbell size={18} className="text-indigo-400" />
-          <span className="text-gray-400 text-sm">Dernière séance</span>
+          <span className="text-gray-400 text-sm">{t('dashboard.lastSession')}</span>
         </div>
         {lastSession ? (
           <div>
@@ -327,7 +335,7 @@ export default function DashboardPage() {
             <p className="text-gray-400 text-sm mt-1">{timeAgo(lastSession.finished_at)}</p>
           </div>
         ) : (
-          <p className="text-gray-500 text-sm">Aucune séance effectuée</p>
+          <p className="text-gray-500 text-sm">{t('dashboard.noSession')}</p>
         )}
       </div>
 
@@ -336,19 +344,19 @@ export default function DashboardPage() {
         <div className="bg-gray-900 rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <Flame size={18} className="text-orange-400" />
-            <span className="text-gray-400 text-sm">Calories du jour</span>
+            <span className="text-gray-400 text-sm">{t('dashboard.caloriesCard')}</span>
           </div>
           {caloriesData ? (
             <>
               <div className="flex items-center justify-between mb-3">
                 <div className="text-center">
                   <p className="text-white font-bold text-xl">{caloriesData.ingested}</p>
-                  <p className="text-gray-500 text-xs mt-1">Ingérées</p>
+                  <p className="text-gray-500 text-xs mt-1">{t('dashboard.ingested')}</p>
                 </div>
                 <div className="text-gray-600 text-lg">−</div>
                 <div className="text-center">
                   <p className="text-orange-400 font-bold text-xl">{caloriesData.burned}</p>
-                  <p className="text-gray-500 text-xs mt-1">Dépensées</p>
+                  <p className="text-gray-500 text-xs mt-1">{t('dashboard.burned')}</p>
                 </div>
                 <div className="text-gray-600 text-lg">=</div>
                 <div className="text-center">
@@ -356,7 +364,7 @@ export default function DashboardPage() {
                     caloriesData.goal && caloriesData.net > caloriesData.goal
                       ? 'text-red-400' : 'text-white'
                   }`}>{caloriesData.net}</p>
-                  <p className="text-gray-500 text-xs mt-1">Net</p>
+                  <p className="text-gray-500 text-xs mt-1">{t('dashboard.net')}</p>
                 </div>
               </div>
               {caloriesData.goal && (
@@ -369,12 +377,12 @@ export default function DashboardPage() {
                       style={{ width: `${Math.min((caloriesData.net / caloriesData.goal) * 100, 100)}%` }}
                     />
                   </div>
-                  <p className="text-gray-500 text-xs">Objectif : {caloriesData.goal} kcal</p>
+                  <p className="text-gray-500 text-xs">{t('dashboard.calorieGoal', { n: caloriesData.goal })}</p>
                 </>
               )}
             </>
           ) : (
-            <p className="text-gray-500 text-sm">Aucun repas enregistré aujourd'hui</p>
+            <p className="text-gray-500 text-sm">{t('dashboard.noCalories')}</p>
           )}
         </div>
       </div>
@@ -384,7 +392,7 @@ export default function DashboardPage() {
         <div className="bg-gray-900 rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-3">
                 <Scale size={18} className="text-green-400" />
-                <span className="text-gray-400 text-sm">Poids actuel</span>
+                <span className="text-gray-400 text-sm">{t('dashboard.currentWeight')}</span>
             </div>
             {weightData ? (
                 <div className="flex items-end gap-3">
@@ -403,7 +411,7 @@ export default function DashboardPage() {
                 )}
                 </div>
             ) : (
-                <p className="text-gray-500 text-sm">Aucune pesée enregistrée</p>
+                <p className="text-gray-500 text-sm">{t('dashboard.noWeight')}</p>
             )}
             </div>
       </div>
