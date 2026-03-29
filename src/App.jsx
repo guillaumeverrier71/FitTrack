@@ -3,6 +3,8 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 import { SessionProvider } from './context/SessionContext'
 import { ToastProvider } from './context/ToastContext'
+import { LangProvider } from './context/LangContext'
+import { UnitProvider } from './context/UnitContext'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 
 const AuthPage = lazy(() => import('./pages/auth/AuthPage'))
@@ -46,6 +48,8 @@ export default function App() {
 
   return (
     <ErrorBoundary>
+      <LangProvider>
+      <UnitProvider>
       <ToastProvider>
         <Suspense fallback={<PageLoader />}>
         <Routes>
@@ -62,6 +66,8 @@ export default function App() {
         </Routes>
         </Suspense>
       </ToastProvider>
+      </UnitProvider>
+      </LangProvider>
     </ErrorBoundary>
   )
 }

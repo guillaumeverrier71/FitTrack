@@ -8,23 +8,25 @@ import { useToast } from '../../context/ToastContext'
 import { handleSupabaseError } from '../../lib/handleError'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { offlineQueue } from '../../lib/offlineQueue'
+import { useLang } from '../../context/LangContext'
+import { useUnits } from '../../context/UnitContext'
 
 const CATEGORIES = ['petit-déj', 'déjeuner', 'dîner', 'snack']
 const ACTIVITY_LEVELS = {
-  sedentaire: { label: 'Sédentaire', multiplier: 1.2 },
-  leger: { label: 'Légèrement actif', multiplier: 1.375 },
-  modere: { label: 'Modérément actif', multiplier: 1.55 },
-  actif: { label: 'Très actif', multiplier: 1.725 },
-  tres_actif: { label: 'Extrêmement actif', multiplier: 1.9 },
+  sedentaire: { multiplier: 1.2 },
+  leger: { multiplier: 1.375 },
+  modere: { multiplier: 1.55 },
+  actif: { multiplier: 1.725 },
+  tres_actif: { multiplier: 1.9 },
 }
 
 function getToday() {
   return new Date().toISOString().split('T')[0]
 }
 
-function formatDate(dateStr) {
+function formatDate(dateStr, locale) {
   const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString('fr-FR', { weekday: 'short' })
+  return d.toLocaleDateString(locale, { weekday: 'short' })
 }
 
 function calculateTDEE(profile) {
@@ -44,6 +46,9 @@ function calculateTDEE(profile) {
 export default function NutritionPage() {
   const toast = useToast()
   const isOnline = useOnlineStatus()
+  const { t, lang } = useLang()
+  const { fmtEnergy, energyLabel } = useUnits()
+  const locale = lang === 'fr' ? 'fr-FR' : 'en-US'
   const [meals, setMeals] = useState([])
   const [activities, setActivities] = useState([])
   const [profile, setProfile] = useState(null)
@@ -119,7 +124,7 @@ export default function NutritionPage() {
 
       const mapped = dates.map(date => ({
         date,
-        label: formatDate(date),
+        label: formatDate(date, locale),
         ingested: (weekMeals || []).filter(m => m.date === date).reduce((s, m) => s + m.calories, 0),
         burned: (weekActs || []).filter(a => a.date === date).reduce((s, a) => s + a.calories_burned, 0),
         isToday: date === today,
@@ -159,7 +164,7 @@ export default function NutritionPage() {
         })
         setMeals(prev => [...prev, { id: offlineId, _queueId: qId, name: foodData.name, calories: foodData.calories, proteins: foodData.proteins || 0, carbs: foodData.carbs || 0, fats: foodData.fats || 0, category: foodData.category }])
         setShowMealForm(false)
-        toast.info('Ajouté hors-ligne — sera synchronisé à la reconnexion.')
+        toast.info(t('nutrition.addedOffline') || t('layout.offlineCache'))
         return
       }
       const { data: { user } } = await supabase.auth.getUser()
@@ -176,10 +181,10 @@ export default function NutritionPage() {
         category: foodData.category,
       })
       setShowMealForm(false)
-      toast.success('Aliment ajouté !')
+      toast.success(t('nutrition.mealAdded'))
       fetchData()
     } catch (err) {
-      await handleSupabaseError(err, toast, 'Erreur lors de l\'ajout de l\'aliment.')
+      await handleSupabaseError(err, toast, t('nutrition.mealAdded'))
     }
   }
 
@@ -198,7 +203,7 @@ export default function NutritionPage() {
         setActivities(prev => [...prev, { id: offlineId, _queueId: qId, name: actName.trim(), calories_burned: parseInt(actCals), duration_minutes: parseInt(actDuration) || null }])
         setActName(''); setActCals(''); setActDuration('')
         setShowActivityForm(false)
-        toast.info('Activité ajoutée hors-ligne — sera synchronisée à la reconnexion.')
+        toast.info(t('layout.offlineCache'))
         return
       }
       const { data: { user } } = await supabase.auth.getUser()
@@ -211,10 +216,10 @@ export default function NutritionPage() {
       })
       setActName(''); setActCals(''); setActDuration('')
       setShowActivityForm(false)
-      toast.success('Activité ajoutée !')
+      toast.success(t('nutrition.activityAdded'))
       fetchData()
     } catch (err) {
-      await handleSupabaseError(err, toast, 'Erreur lors de l\'ajout de l\'activité.')
+      await handleSupabaseError(err, toast, t('nutrition.activityAdded'))
     }
   }
 
@@ -242,10 +247,10 @@ export default function NutritionPage() {
         fats_goal_g: profFatsGoal ? parseInt(profFatsGoal) : null,
       }, { onConflict: 'user_id' })
       setShowProfileForm(false)
-      toast.success('Objectif mis à jour !')
+      toast.success(t('nutrition.goalUpdated'))
       fetchData()
     } catch (err) {
-      await handleSupabaseError(err, toast, 'Erreur lors de la mise à jour de l\'objectif.')
+      await handleSupabaseError(err, toast, t('nutrition.goalUpdated'))
     }
   }
 
@@ -255,7 +260,7 @@ export default function NutritionPage() {
       await supabase.from('meal_entries').insert({
         user_id: user.id,
         date: getToday(),
-        name: manName.trim() || 'Saisie manuelle',
+        name: manName.trim() || t('nutrition.manualEntry'),
         calories: parseInt(manCals) || 0,
         proteins: parseFloat(manProteins) || 0,
         carbs: parseFloat(manCarbs) || 0,
@@ -265,10 +270,10 @@ export default function NutritionPage() {
       })
       setManName(''); setManCals(''); setManProteins(''); setManCarbs(''); setManFats('')
       setShowManualForm(false)
-      toast.success('Ajouté !')
+      toast.success(t('nutrition.added'))
       fetchData()
     } catch (err) {
-      await handleSupabaseError(err, toast, 'Erreur lors de l\'ajout.')
+      await handleSupabaseError(err, toast, t('nutrition.added'))
     }
   }
 
@@ -329,13 +334,13 @@ export default function NutritionPage() {
         .eq('user_id', user.id)
         .eq('date', yesterdayStr)
       if (!yesterdayMeals?.length) {
-        toast.info('Aucun repas hier à copier.')
+        toast.info(t('nutrition.copyEmpty'))
         return
       }
       await supabase.from('meal_entries').insert(
         yesterdayMeals.map(({ id, created_at, ...m }) => ({ ...m, date: getToday() }))
       )
-      toast.success(`${yesterdayMeals.length} repas copiés depuis hier !`)
+      toast.success(t('nutrition.copySuccess', { n: yesterdayMeals.length }))
       fetchData()
     } catch (err) {
       await handleSupabaseError(err, toast, 'Erreur lors de la copie.')
@@ -365,8 +370,16 @@ export default function NutritionPage() {
     fats: profile?.fats_goal_g || Math.round(calorieGoal * 0.25 / 9),
   } : null
 
+  const CAT_LABELS = {
+    'petit-déj': t('nutrition.catBreakfast'),
+    'déjeuner': t('nutrition.catLunch'),
+    'dîner': t('nutrition.catDinner'),
+    'snack': t('nutrition.catSnack'),
+  }
+
   const byCategory = CATEGORIES.map(cat => ({
     cat,
+    label: CAT_LABELS[cat] || cat,
     total: meals.filter(m => m.category === cat).reduce((s, m) => s + m.calories, 0),
     items: meals.filter(m => m.category === cat),
   }))
@@ -374,35 +387,35 @@ export default function NutritionPage() {
   return (
     <div className="p-4 pb-24 bg-gray-950 min-h-screen flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Calories</h1>
+        <h1 className="text-2xl font-bold text-white">{t('nav.nutrition')}</h1>
         <button
           onClick={() => setShowProfileForm(true)}
           className="flex items-center gap-2 bg-gray-900 border border-gray-800 hover:border-indigo-500/50 text-gray-400 hover:text-white px-4 py-2.5 rounded-xl transition-all"
         >
           <Settings2 size={15} className="text-indigo-400 shrink-0" />
           <span className="text-sm font-medium">
-            {calorieGoal ? `${calorieGoal} kcal` : 'Objectif'}
+            {calorieGoal ? fmtEnergy(calorieGoal) : t('common.goal')}
           </span>
         </button>
       </div>
 
       {/* Balance du jour */}
       <div className="bg-gray-900 rounded-2xl p-5">
-        <p className="text-gray-400 text-sm mb-3">Balance du jour</p>
+        <p className="text-gray-400 text-sm mb-3">{t('dashboard.caloriesCard')}</p>
         <div className="flex items-center justify-between mb-4">
           <div className="text-center">
-            <p className="text-2xl font-bold text-green-400">{totalIngested}</p>
-            <p className="text-gray-500 text-xs mt-1">Ingérées</p>
+            <p className="text-2xl font-bold text-green-400">{fmtEnergy(totalIngested)}</p>
+            <p className="text-gray-500 text-xs mt-1">{t('dashboard.ingested')}</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-orange-400">{totalBurned}</p>
-            <p className="text-gray-500 text-xs mt-1">Dépensées</p>
+            <p className="text-2xl font-bold text-orange-400">{fmtEnergy(totalBurned)}</p>
+            <p className="text-gray-500 text-xs mt-1">{t('dashboard.burned')}</p>
           </div>
           <div className="text-center">
             <p className={`text-2xl font-bold ${calorieGoal && netCalories > calorieGoal ? 'text-red-400' : 'text-white'}`}>
-              {netCalories}
+              {fmtEnergy(netCalories)}
             </p>
-            <p className="text-gray-500 text-xs mt-1">Net</p>
+            <p className="text-gray-500 text-xs mt-1">{t('dashboard.net')}</p>
           </div>
         </div>
 
@@ -414,15 +427,15 @@ export default function NutritionPage() {
                 style={{ width: `${Math.min((netCalories / calorieGoal) * 100, 100)}%` }}
               />
             </div>
-            <p className="text-gray-500 text-xs mb-3">Objectif : {calorieGoal} kcal/jour</p>
+            <p className="text-gray-500 text-xs mb-3">{t('nutrition.calorieGoalFmt', { energy: fmtEnergy(calorieGoal) })}</p>
           </>
         )}
 
         <div className="flex flex-col gap-2">
           {[
-            { label: 'Protéines', value: totalProteins, goal: macroGoals?.proteins, color: 'bg-blue-500', text: 'text-blue-400' },
-            { label: 'Glucides', value: totalCarbs, goal: macroGoals?.carbs, color: 'bg-yellow-500', text: 'text-yellow-400' },
-            { label: 'Lipides', value: totalFats, goal: macroGoals?.fats, color: 'bg-red-500', text: 'text-red-400' },
+            { label: t('nutrition.proteins'), value: totalProteins, goal: macroGoals?.proteins, color: 'bg-blue-500', text: 'text-blue-400' },
+            { label: t('nutrition.carbs'), value: totalCarbs, goal: macroGoals?.carbs, color: 'bg-yellow-500', text: 'text-yellow-400' },
+            { label: t('nutrition.fats'), value: totalFats, goal: macroGoals?.fats, color: 'bg-red-500', text: 'text-red-400' },
           ].map(({ label, value, goal, color, text }) => (
             <div key={label} className="bg-gray-800 rounded-xl px-3 py-2">
               <div className="flex items-center justify-between mb-1">
@@ -444,33 +457,33 @@ export default function NutritionPage() {
       {/* Repas par catégorie */}
       <div className="bg-gray-900 rounded-2xl p-5 flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-white font-semibold">Repas</h2>
+          <h2 className="text-white font-semibold">{t('nutrition.meals')}</h2>
           <button
             onClick={handleCopyYesterday}
             disabled={copyingYesterday}
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
           >
             <Copy size={13} />
-            {copyingYesterday ? 'Copie...' : 'Copier hier'}
+            {copyingYesterday ? t('common.loading') : t('nutrition.copyYesterday')}
           </button>
         </div>
-        {byCategory.map(({ cat, total, items }) => (
+        {byCategory.map(({ cat, label, total, items }) => (
           <div key={cat}>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-400 text-sm capitalize">{cat}</span>
+              <span className="text-gray-400 text-sm capitalize">{label}</span>
               <div className="flex items-center gap-2">
-                {total > 0 && <span className="text-gray-400 text-sm">{total} kcal</span>}
+                {total > 0 && <span className="text-gray-400 text-sm">{fmtEnergy(total)}</span>}
                 <button
                   onClick={() => { setManualCat(cat); setShowManualForm(true) }}
                   className="bg-gray-700 hover:bg-gray-600 text-gray-300 p-1 rounded-lg transition-colors"
-                  title="Saisie manuelle"
+                  title={t('nutrition.manualEntry')}
                 >
                   <PenLine size={16} />
                 </button>
                 <button
                   onClick={() => { setActiveMealCat(cat); setShowMealForm(true) }}
                   className="bg-indigo-600 hover:bg-indigo-500 text-white p-1 rounded-lg transition-colors"
-                  title="Rechercher un aliment"
+                  title={t('nutrition.foodSearch')}
                 >
                   <Plus size={16} />
                 </button>
@@ -483,7 +496,7 @@ export default function NutritionPage() {
                     <div className="flex items-center justify-between">
                       <span className="text-white text-sm">{meal.name}</span>
                       <div className="flex items-center gap-3">
-                        <span className="text-orange-400 text-sm font-medium">{meal.calories} kcal</span>
+                        <span className="text-orange-400 text-sm font-medium">{fmtEnergy(meal.calories)}</span>
                         <button onClick={() => setConfirmDelete({ id: meal.id, type: 'meal' })} className="text-gray-500 hover:text-red-400 transition-colors">
                           <Trash2 size={14} />
                         </button>
@@ -491,16 +504,16 @@ export default function NutritionPage() {
                     </div>
                     {(meal.proteins > 0 || meal.carbs > 0 || meal.fats > 0) && (
                       <div className="flex gap-3">
-                        <span className="text-blue-400 text-xs">{meal.proteins}g prot</span>
-                        <span className="text-yellow-400 text-xs">{meal.carbs}g gluc</span>
-                        <span className="text-red-400 text-xs">{meal.fats}g lip</span>
+                        <span className="text-blue-400 text-xs">{meal.proteins}g {t('nutrition.proteins').toLowerCase()}</span>
+                        <span className="text-yellow-400 text-xs">{meal.carbs}g {t('nutrition.carbs').toLowerCase()}</span>
+                        <span className="text-red-400 text-xs">{meal.fats}g {t('nutrition.fats').toLowerCase()}</span>
                       </div>
                     )}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-gray-600 text-xs">Rien ajouté</p>
+              <p className="text-gray-600 text-xs">{t('nutrition.noMeals')}</p>
             )}
           </div>
         ))}
@@ -509,7 +522,7 @@ export default function NutritionPage() {
       {/* Activités */}
       <div className="bg-gray-900 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-white font-semibold">Activités</h2>
+          <h2 className="text-white font-semibold">{t('nutrition.activities')}</h2>
           <button
             onClick={() => setShowActivityForm(true)}
             className="bg-indigo-600 hover:bg-indigo-500 text-white p-1.5 rounded-lg transition-colors"
@@ -518,7 +531,7 @@ export default function NutritionPage() {
           </button>
         </div>
         {activities.length === 0 ? (
-          <p className="text-gray-500 text-sm">Aucune activité aujourd'hui</p>
+          <p className="text-gray-500 text-sm">{t('nutrition.noActivities')}</p>
         ) : (
           <div className="flex flex-col gap-2">
             {activities.map(act => (
@@ -528,7 +541,7 @@ export default function NutritionPage() {
                   {act.duration_minutes && <span className="text-gray-500 text-xs ml-2">{act.duration_minutes} min</span>}
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-green-400 text-sm font-medium">-{act.calories_burned} kcal</span>
+                  <span className="text-green-400 text-sm font-medium">-{fmtEnergy(act.calories_burned)}</span>
                   <button onClick={() => setConfirmDelete({ id: act.id, type: 'activity' })} className="text-gray-500 hover:text-red-400 transition-colors">
                     <Trash2 size={14} />
                   </button>
@@ -541,14 +554,14 @@ export default function NutritionPage() {
 
       {/* Graphique semaine */}
       <div className="bg-gray-900 rounded-2xl p-5">
-        <h2 className="text-white font-semibold mb-4">Cette semaine</h2>
+        <h2 className="text-white font-semibold mb-4">{t('dashboard.thisWeek')}</h2>
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={weekData} barSize={24}>
             <XAxis dataKey="label" tick={{ fill: '#6b7280', fontSize: 12 }} axisLine={false} tickLine={false} />
             <YAxis hide />
             <Tooltip
               contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '12px' }}
-              formatter={(value) => [`${value} kcal`, 'Ingérées']}
+              formatter={(value) => [fmtEnergy(value), t('dashboard.ingested')]}
             />
             <Bar dataKey="ingested" radius={[6, 6, 0, 0]}>
               {weekData.map((entry, i) => (
@@ -574,15 +587,15 @@ export default function NutritionPage() {
           <div className="bg-gray-900 w-full rounded-t-3xl p-6 flex flex-col gap-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-white font-semibold">Saisie manuelle</h2>
-                <p className="text-gray-500 text-xs capitalize">{manualCat}</p>
+                <h2 className="text-white font-semibold">{t('nutrition.manualEntry')}</h2>
+                <p className="text-gray-500 text-xs capitalize">{CAT_LABELS[manualCat] || manualCat}</p>
               </div>
               <button onClick={() => setShowManualForm(false)}><X size={22} className="text-gray-400" /></button>
             </div>
 
             <input
               type="text"
-              placeholder="Nom (ex: Riz blanc)"
+              placeholder={t('nutrition.manualName')}
               value={manName}
               onChange={e => setManName(e.target.value)}
               className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
@@ -590,10 +603,10 @@ export default function NutritionPage() {
             />
 
             <div>
-              <label className="text-gray-400 text-xs mb-1 block">Calories (kcal) *</label>
+              <label className="text-gray-400 text-xs mb-1 block">{t('nutrition.manualCals')}</label>
               <input
                 type="number"
-                placeholder="ex: 350"
+                placeholder={t('nutrition.agePlaceholder') || 'ex: 350'}
                 value={manCals}
                 onChange={e => setManCals(e.target.value)}
                 className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full"
@@ -602,7 +615,7 @@ export default function NutritionPage() {
 
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="text-blue-400 text-xs mb-1 block">Protéines (g)</label>
+                <label className="text-blue-400 text-xs mb-1 block">{t('nutrition.manualProteins')}</label>
                 <input
                   type="number"
                   placeholder="0"
@@ -612,7 +625,7 @@ export default function NutritionPage() {
                 />
               </div>
               <div>
-                <label className="text-yellow-400 text-xs mb-1 block">Glucides (g)</label>
+                <label className="text-yellow-400 text-xs mb-1 block">{t('nutrition.manualCarbs')}</label>
                 <input
                   type="number"
                   placeholder="0"
@@ -622,7 +635,7 @@ export default function NutritionPage() {
                 />
               </div>
               <div>
-                <label className="text-red-400 text-xs mb-1 block">Lipides (g)</label>
+                <label className="text-red-400 text-xs mb-1 block">{t('nutrition.manualFats')}</label>
                 <input
                   type="number"
                   placeholder="0"
@@ -638,7 +651,7 @@ export default function NutritionPage() {
               disabled={!manCals}
               className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
             >
-              Ajouter
+              {t('nutrition.addMeal')}
             </button>
           </div>
         </div>
@@ -649,18 +662,18 @@ export default function NutritionPage() {
         <div className="fixed inset-0 bg-black/70 z-50 flex items-end">
           <div className="bg-gray-900 w-full rounded-t-3xl p-6 flex flex-col gap-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-white font-semibold">Ajouter une activité</h2>
+              <h2 className="text-white font-semibold">{t('nutrition.addActivity')}</h2>
               <button onClick={() => setShowActivityForm(false)}><X size={22} className="text-gray-400" /></button>
             </div>
-            <input type="text" placeholder="Activité (ex: Course à pied)" value={actName} onChange={e => setActName(e.target.value)}
+            <input type="text" placeholder={t('nutrition.activityName')} value={actName} onChange={e => setActName(e.target.value)}
               className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
-            <input type="number" placeholder="Calories brûlées (kcal)" value={actCals} onChange={e => setActCals(e.target.value)}
+            <input type="number" placeholder={t('nutrition.activityCals')} value={actCals} onChange={e => setActCals(e.target.value)}
               className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" />
-            <input type="number" placeholder="Durée (minutes, optionnel)" value={actDuration} onChange={e => setActDuration(e.target.value)}
+            <input type="number" placeholder={t('nutrition.activityDuration')} value={actDuration} onChange={e => setActDuration(e.target.value)}
               className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" />
             <button onClick={handleAddActivity} disabled={!actName || !actCals}
               className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors">
-              Ajouter
+              {t('nutrition.addActivity')}
             </button>
           </div>
         </div>
@@ -668,9 +681,9 @@ export default function NutritionPage() {
 
       {confirmDelete && (
         <ConfirmModal
-          title={confirmDelete.type === 'meal' ? 'Supprimer ce repas ?' : 'Supprimer cette activité ?'}
-          description="Cette action est irréversible."
-          confirmLabel="Supprimer"
+          title={confirmDelete.type === 'meal' ? t('nutrition.deleteTitle') : t('nutrition.deleteTitle')}
+          description={t('nutrition.deleteDesc')}
+          confirmLabel={t('common.delete')}
           onConfirm={confirmDeleteAndExecute}
           onCancel={() => setConfirmDelete(null)}
         />
@@ -681,58 +694,58 @@ export default function NutritionPage() {
         <div className="fixed inset-0 bg-black/70 z-50 flex items-end">
           <div className="bg-gray-900 w-full rounded-t-3xl p-6 flex flex-col gap-4 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between">
-              <h2 className="text-white font-semibold">Objectif calorique</h2>
+              <h2 className="text-white font-semibold">{t('nutrition.caloricGoalTitle')}</h2>
               <button onClick={() => setShowProfileForm(false)}><X size={22} className="text-gray-400" /></button>
             </div>
-            <p className="text-gray-400 text-sm">Renseigne ces infos pour calculer automatiquement ton besoin calorique journalier.</p>
+            <p className="text-gray-400 text-sm">{t('nutrition.caloricGoalDesc')}</p>
             <div>
-              <label className="text-gray-400 text-xs mb-1 block">Âge</label>
-              <input type="number" value={profAge} onChange={e => setProfAge(e.target.value)} placeholder="ex: 25"
+              <label className="text-gray-400 text-xs mb-1 block">{t('nutrition.ageLabel')}</label>
+              <input type="number" value={profAge} onChange={e => setProfAge(e.target.value)} placeholder={t('nutrition.agePlaceholder')}
                 className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full" />
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-1 block">Sexe</label>
+              <label className="text-gray-400 text-xs mb-1 block">{t('nutrition.sexLabel')}</label>
               <div className="flex gap-2">
-                {['homme', 'femme'].map(g => (
-                  <button key={g} onClick={() => setProfGender(g)}
-                    className={`flex-1 py-3 rounded-xl text-sm capitalize transition-colors ${profGender === g ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}>
-                    {g}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-gray-400 text-xs mb-1 block">Niveau d'activité</label>
-              <div className="flex flex-col gap-2">
-                {Object.entries(ACTIVITY_LEVELS).map(([key, { label }]) => (
-                  <button key={key} onClick={() => setProfActivity(key)}
-                    className={`py-3 px-4 rounded-xl text-sm text-left transition-colors ${profActivity === key ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}>
+                {[['homme', t('common.male')], ['femme', t('common.female')]].map(([val, label]) => (
+                  <button key={val} onClick={() => setProfGender(val)}
+                    className={`flex-1 py-3 rounded-xl text-sm transition-colors ${profGender === val ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}>
                     {label}
                   </button>
                 ))}
               </div>
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-1 block">Objectif calorique manuel (optionnel)</label>
-              <input type="number" value={profGoalCals} onChange={e => setProfGoalCals(e.target.value)} placeholder="ex: 2200"
+              <label className="text-gray-400 text-xs mb-1 block">{t('nutrition.activityLevel')}</label>
+              <div className="flex flex-col gap-2">
+                {Object.keys(ACTIVITY_LEVELS).map(key => (
+                  <button key={key} onClick={() => setProfActivity(key)}
+                    className={`py-3 px-4 rounded-xl text-sm text-left transition-colors ${profActivity === key ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}>
+                    {t(`nutrition.actLevel${key.charAt(0).toUpperCase()}${key.slice(1)}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-gray-400 text-xs mb-1 block">{t('nutrition.manualGoalLabel')}</label>
+              <input type="number" value={profGoalCals} onChange={e => setProfGoalCals(e.target.value)} placeholder={t('nutrition.manualGoalPlaceholder')}
                 className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full" />
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">Objectifs macros (optionnel — sinon calculé depuis les calories)</label>
+              <label className="text-gray-400 text-xs mb-2 block">{t('nutrition.macroGoalHint')}</label>
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <label className="text-blue-400 text-xs mb-1 block">Protéines (g)</label>
-                  <input type="number" value={profProteinsGoal} onChange={e => setProfProteinsGoal(e.target.value)} placeholder="ex: 150"
+                  <label className="text-blue-400 text-xs mb-1 block">{t('nutrition.proteinsG')}</label>
+                  <input type="number" value={profProteinsGoal} onChange={e => setProfProteinsGoal(e.target.value)} placeholder="150"
                     className="bg-gray-800 text-white rounded-xl px-3 py-3 outline-none focus:ring-2 focus:ring-blue-500 w-full text-sm" />
                 </div>
                 <div className="flex-1">
-                  <label className="text-yellow-400 text-xs mb-1 block">Glucides (g)</label>
-                  <input type="number" value={profCarbsGoal} onChange={e => setProfCarbsGoal(e.target.value)} placeholder="ex: 250"
+                  <label className="text-yellow-400 text-xs mb-1 block">{t('nutrition.carbsG')}</label>
+                  <input type="number" value={profCarbsGoal} onChange={e => setProfCarbsGoal(e.target.value)} placeholder="250"
                     className="bg-gray-800 text-white rounded-xl px-3 py-3 outline-none focus:ring-2 focus:ring-yellow-500 w-full text-sm" />
                 </div>
                 <div className="flex-1">
-                  <label className="text-red-400 text-xs mb-1 block">Lipides (g)</label>
-                  <input type="number" value={profFatsGoal} onChange={e => setProfFatsGoal(e.target.value)} placeholder="ex: 70"
+                  <label className="text-red-400 text-xs mb-1 block">{t('nutrition.fatsG')}</label>
+                  <input type="number" value={profFatsGoal} onChange={e => setProfFatsGoal(e.target.value)} placeholder="70"
                     className="bg-gray-800 text-white rounded-xl px-3 py-3 outline-none focus:ring-2 focus:ring-red-500 w-full text-sm" />
                 </div>
               </div>
@@ -740,22 +753,20 @@ export default function NutritionPage() {
             {profAge && profile?.height_cm && profile?.weight_goal_kg && (
               <div className="bg-indigo-950 rounded-xl p-3">
                 <p className="text-indigo-300 text-sm">
-                  Besoin estimé : <span className="font-bold text-white">
-                    {calculateTDEE({
-                      height_cm: profile.height_cm,
-                      weight_goal_kg: profile.weight_goal_kg,
-                      age: parseInt(profAge),
-                      gender: profGender,
-                      activity_level: profActivity,
-                      current_weight: currentWeight,
-                    })} kcal/jour
-                  </span>
+                  {t('nutrition.estimatedNeedFmt', { energy: fmtEnergy(calculateTDEE({
+                    height_cm: profile.height_cm,
+                    weight_goal_kg: profile.weight_goal_kg,
+                    age: parseInt(profAge),
+                    gender: profGender,
+                    activity_level: profActivity,
+                    current_weight: currentWeight,
+                  })) })}
                 </p>
               </div>
             )}
             <button onClick={handleSaveProfile}
               className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl transition-colors">
-              Enregistrer
+              {t('common.save')}
             </button>
           </div>
         </div>

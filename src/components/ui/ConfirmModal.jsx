@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { AlertTriangle, LogOut } from 'lucide-react'
+import { useLang } from '../../context/LangContext'
 
 const VARIANTS = {
   danger: {
@@ -16,8 +17,11 @@ const VARIANTS = {
   },
 }
 
-export default function ConfirmModal({ title, description, confirmLabel = 'Confirmer', cancelLabel = 'Annuler', variant = 'danger', onConfirm, onCancel }) {
+export default function ConfirmModal({ title, description, confirmLabel, cancelLabel, variant = 'danger', onConfirm, onCancel }) {
+  const { t } = useLang()
   const v = VARIANTS[variant] || VARIANTS.danger
+  const resolvedConfirm = confirmLabel ?? t('common.confirm')
+  const resolvedCancel = cancelLabel ?? t('common.cancel')
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onCancel() }
@@ -33,30 +37,27 @@ export default function ConfirmModal({ title, description, confirmLabel = 'Confi
         style={{ animation: 'slideUp 0.25s ease-out' }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Icône */}
         <div className={`w-14 h-14 rounded-2xl ${v.bg} border ${v.border} flex items-center justify-center mx-auto`}>
           {v.icon}
         </div>
 
-        {/* Texte */}
         <div className="text-center">
           <h2 className="text-white font-bold text-lg mb-1">{title}</h2>
           {description && <p className="text-gray-400 text-sm">{description}</p>}
         </div>
 
-        {/* Boutons */}
         <div className="flex flex-col gap-2">
           <button
             onClick={onConfirm}
             className={`w-full ${v.confirm} text-white font-semibold py-3.5 rounded-2xl transition-colors`}
           >
-            {confirmLabel}
+            {resolvedConfirm}
           </button>
           <button
             onClick={onCancel}
             className="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold py-3.5 rounded-2xl transition-colors"
           >
-            {cancelLabel}
+            {resolvedCancel}
           </button>
         </div>
       </div>

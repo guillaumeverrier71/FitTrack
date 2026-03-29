@@ -1,13 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { ChevronRight } from 'lucide-react'
-
-const GOALS = [
-  { value: 'lose_weight', label: 'Perdre du poids', emoji: '🔥' },
-  { value: 'maintain', label: 'Maintenir mon poids', emoji: '⚖️' },
-  { value: 'gain_muscle', label: 'Prendre du muscle', emoji: '💪' },
-  { value: 'endurance', label: 'Améliorer mon endurance', emoji: '🏃' },
-]
+import { useLang } from '../../context/LangContext'
 
 const CALORIE_DEFAULTS = {
   lose_weight: 1800,
@@ -17,6 +11,7 @@ const CALORIE_DEFAULTS = {
 }
 
 export default function OnboardingModal({ userId, onDone }) {
+  const { t, lang, setLang } = useLang()
   const [step, setStep] = useState(0)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -25,7 +20,14 @@ export default function OnboardingModal({ userId, onDone }) {
   const [goal, setGoal] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const steps = ['welcome', 'name', 'body', 'goal', 'done']
+  const GOALS = [
+    { value: 'lose_weight', label: t('onboarding.goalLoseWeight'), emoji: '🔥' },
+    { value: 'maintain', label: t('onboarding.goalMaintain'), emoji: '⚖️' },
+    { value: 'gain_muscle', label: t('onboarding.goalGainMuscle'), emoji: '💪' },
+    { value: 'endurance', label: t('onboarding.goalEndurance'), emoji: '🏃' },
+  ]
+
+  const steps = ['lang', 'welcome', 'name', 'body', 'goal', 'done']
   const current = steps[step]
 
   const next = () => setStep(s => s + 1)
@@ -58,16 +60,47 @@ export default function OnboardingModal({ userId, onDone }) {
   return (
     <div className="fixed inset-0 z-50 bg-gray-950 flex flex-col">
       {/* Progress bar */}
-      {current !== 'welcome' && current !== 'done' && (
+      {current !== 'lang' && current !== 'welcome' && current !== 'done' && (
         <div className="w-full h-1 bg-gray-800">
           <div
             className="h-1 bg-indigo-500 transition-all duration-300"
-            style={{ width: `${((step - 1) / 3) * 100}%` }}
+            style={{ width: `${((step - 2) / 3) * 100}%` }}
           />
         </div>
       )}
 
       <div className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
+
+        {current === 'lang' && (
+          <>
+            <div className="text-center w-full">
+              <h2 className="text-2xl font-bold text-white mb-2">{t('onboarding.languageTitle')}</h2>
+              <p className="text-gray-400 text-sm">{t('onboarding.languageSubtitle')}</p>
+            </div>
+            <div className="flex gap-3 w-full">
+              <button
+                onClick={() => setLang('fr')}
+                className={`flex-1 flex items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-colors ${lang === 'fr' ? 'border-indigo-500 bg-indigo-950' : 'border-gray-800 bg-gray-900'}`}
+              >
+                <span className="text-2xl">🇫🇷</span>
+                <span className={`font-medium ${lang === 'fr' ? 'text-white' : 'text-gray-300'}`}>Français</span>
+              </button>
+              <button
+                onClick={() => setLang('en')}
+                className={`flex-1 flex items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-colors ${lang === 'en' ? 'border-indigo-500 bg-indigo-950' : 'border-gray-800 bg-gray-900'}`}
+              >
+                <span className="text-2xl">🇬🇧</span>
+                <span className={`font-medium ${lang === 'en' ? 'text-white' : 'text-gray-300'}`}>English</span>
+              </button>
+            </div>
+            <button
+              onClick={next}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-4 rounded-2xl transition-colors"
+            >
+              {t('common.continue')}
+            </button>
+          </>
+        )}
 
         {current === 'welcome' && (
           <>
@@ -81,19 +114,19 @@ export default function OnboardingModal({ userId, onDone }) {
               }}
             />
             <div className="text-center">
-              <h1 className="text-3xl font-bold text-white mb-3">Bienvenue sur BodyPilot</h1>
+              <h1 className="text-3xl font-bold text-white mb-3">{t('onboarding.welcomeTitle')}</h1>
               <p className="text-gray-400 leading-relaxed">
-                Prends 30 secondes pour configurer ton profil et obtenir une expérience personnalisée.
+                {t('onboarding.welcomeSubtitle')}
               </p>
             </div>
             <button
               onClick={next}
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-4 rounded-2xl flex items-center justify-center gap-2 transition-colors"
             >
-              Commencer <ChevronRight size={20} />
+              {t('onboarding.start')} <ChevronRight size={20} />
             </button>
             <button onClick={onDone} className="text-gray-500 text-sm">
-              Passer pour l'instant
+              {t('onboarding.skipNow')}
             </button>
           </>
         )}
@@ -101,13 +134,13 @@ export default function OnboardingModal({ userId, onDone }) {
         {current === 'name' && (
           <>
             <div className="text-center w-full">
-              <h2 className="text-2xl font-bold text-white mb-2">Comment tu t'appelles ?</h2>
-              <p className="text-gray-400 text-sm">Pour personnaliser ton expérience</p>
+              <h2 className="text-2xl font-bold text-white mb-2">{t('onboarding.nameTitle')}</h2>
+              <p className="text-gray-400 text-sm">{t('onboarding.nameSubtitle')}</p>
             </div>
             <div className="flex flex-col gap-3 w-full">
               <input
                 type="text"
-                placeholder="Prénom"
+                placeholder={t('onboarding.firstName')}
                 value={firstName}
                 onChange={e => setFirstName(e.target.value)}
                 autoFocus
@@ -115,7 +148,7 @@ export default function OnboardingModal({ userId, onDone }) {
               />
               <input
                 type="text"
-                placeholder="Nom (optionnel)"
+                placeholder={t('onboarding.lastName')}
                 value={lastName}
                 onChange={e => setLastName(e.target.value)}
                 className="bg-gray-900 border border-gray-700 text-white rounded-2xl px-4 py-4 text-lg outline-none focus:border-indigo-500 transition-colors"
@@ -126,7 +159,7 @@ export default function OnboardingModal({ userId, onDone }) {
               disabled={!firstName.trim()}
               className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold py-4 rounded-2xl transition-colors"
             >
-              Continuer
+              {t('common.continue')}
             </button>
           </>
         )}
@@ -134,12 +167,12 @@ export default function OnboardingModal({ userId, onDone }) {
         {current === 'body' && (
           <>
             <div className="text-center w-full">
-              <h2 className="text-2xl font-bold text-white mb-2">Ton corps</h2>
-              <p className="text-gray-400 text-sm">Ces données restent privées</p>
+              <h2 className="text-2xl font-bold text-white mb-2">{t('onboarding.bodyTitle')}</h2>
+              <p className="text-gray-400 text-sm">{t('onboarding.bodySubtitle')}</p>
             </div>
             <div className="flex gap-3 w-full">
               <div className="flex-1">
-                <label className="text-gray-400 text-xs mb-2 block">Taille (cm)</label>
+                <label className="text-gray-400 text-xs mb-2 block">{t('onboarding.height')}</label>
                 <input
                   type="number"
                   placeholder="175"
@@ -149,7 +182,7 @@ export default function OnboardingModal({ userId, onDone }) {
                 />
               </div>
               <div className="flex-1">
-                <label className="text-gray-400 text-xs mb-2 block">Poids (kg)</label>
+                <label className="text-gray-400 text-xs mb-2 block">{t('onboarding.weight')}</label>
                 <input
                   type="number"
                   placeholder="70"
@@ -164,7 +197,7 @@ export default function OnboardingModal({ userId, onDone }) {
               onClick={next}
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-4 rounded-2xl transition-colors"
             >
-              {height || weight ? 'Continuer' : 'Passer'}
+              {height || weight ? t('common.continue') : t('common.skip')}
             </button>
           </>
         )}
@@ -172,8 +205,8 @@ export default function OnboardingModal({ userId, onDone }) {
         {current === 'goal' && (
           <>
             <div className="text-center w-full">
-              <h2 className="text-2xl font-bold text-white mb-2">Ton objectif</h2>
-              <p className="text-gray-400 text-sm">On adaptera tes recommandations</p>
+              <h2 className="text-2xl font-bold text-white mb-2">{t('onboarding.goalTitle')}</h2>
+              <p className="text-gray-400 text-sm">{t('onboarding.goalSubtitle')}</p>
             </div>
             <div className="flex flex-col gap-3 w-full">
               {GOALS.map(g => (
@@ -197,7 +230,7 @@ export default function OnboardingModal({ userId, onDone }) {
               onClick={() => { next() }}
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-4 rounded-2xl transition-colors"
             >
-              {goal ? 'Continuer' : 'Passer'}
+              {goal ? t('common.continue') : t('common.skip')}
             </button>
           </>
         )}
@@ -207,10 +240,10 @@ export default function OnboardingModal({ userId, onDone }) {
             <div className="text-center">
               <div className="text-6xl mb-4">🎉</div>
               <h2 className="text-2xl font-bold text-white mb-3">
-                Prêt{firstName ? `, ${firstName}` : ''} !
+                {t('onboarding.doneTitle', { name: firstName ? `, ${firstName}` : '' })}
               </h2>
               <p className="text-gray-400 leading-relaxed">
-                Ton profil est configuré. Il ne te reste plus qu'à commencer ta première séance.
+                {t('onboarding.doneSubtitle')}
               </p>
             </div>
             <button
@@ -218,7 +251,7 @@ export default function OnboardingModal({ userId, onDone }) {
               disabled={saving}
               className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-4 rounded-2xl transition-colors"
             >
-              {saving ? 'Enregistrement...' : "C'est parti !"}
+              {saving ? t('common.saving') : t('onboarding.doneBtn')}
             </button>
           </>
         )}

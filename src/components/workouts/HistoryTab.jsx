@@ -2,17 +2,7 @@ import { useState, useEffect } from 'react'
 import { ChevronDown, ChevronRight, Dumbbell, Clock, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import ConfirmModal from '../ui/ConfirmModal'
-
-function formatDate(dateStr) {
-  const todayStr = new Date().toISOString().split('T')[0]
-  const yesterdayDate = new Date()
-  yesterdayDate.setDate(yesterdayDate.getDate() - 1)
-  const yesterdayStr = yesterdayDate.toISOString().split('T')[0]
-  if (dateStr === todayStr) return "Aujourd'hui"
-  if (dateStr === yesterdayStr) return 'Hier'
-  const d = new Date(dateStr + 'T12:00:00')
-  return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
-}
+import { useLang } from '../../context/LangContext'
 
 function formatDuration(start, end) {
   if (!start || !end) return null
@@ -24,16 +14,13 @@ function formatDuration(start, end) {
   return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`
 }
 
-function SessionCard({ session }) {
+function SessionCard({ session, t, locale }) {
   const [open, setOpen] = useState(false)
   const [sets, setSets] = useState(null)
   const [loading, setLoading] = useState(false)
 
   const handleToggle = async () => {
-    // Toggle open immediately for responsiveness
     setOpen(o => !o)
-
-    // Only fetch if opening and not yet fetched
     if (!open && sets === null) {
       setLoading(true)
       try {
@@ -65,7 +52,6 @@ function SessionCard({ session }) {
     }
   }
 
-  // Group sets by exercise_id in order of first appearance
   const grouped = []
   const seen = {}
   for (const s of (sets || [])) {
@@ -83,7 +69,7 @@ function SessionCard({ session }) {
       <button onClick={handleToggle} className="w-full flex items-center justify-between p-4 text-left">
         <div className="flex-1 min-w-0">
           <p className="text-white font-semibold truncate">
-            {session.workout_templates?.name || 'Séance libre'}
+            {session.workout_templates?.name || t('history.freeSession')}
           </p>
           <div className="flex items-center gap-3 mt-1">
             {duration && (
@@ -93,7 +79,7 @@ function SessionCard({ session }) {
             )}
             {sets !== null && (
               <span className="text-gray-500 text-xs">
-                {sets.length} série{sets.length !== 1 ? 's' : ''}
+                {t('history.sets', { n: sets.length, s: sets.length !== 1 ? 's' : '' })}
               </span>
             )}
           </div>
@@ -109,7 +95,7 @@ function SessionCard({ session }) {
           {loading ? (
             <div className="flex justify-center py-3"><div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>
           ) : grouped.length === 0 ? (
-            <p className="text-gray-500 text-sm py-3">Aucune série enregistrée</p>
+            <p className="text-gray-500 text-sm py-3">{t('history.noSets')}</p>
           ) : (
             <div className="flex flex-col gap-4 pt-3">
               {grouped.map((ex, i) => (
@@ -125,7 +111,7 @@ function SessionCard({ session }) {
                   <div className="flex flex-col gap-1">
                     {ex.sets.map((s, j) => (
                       <div key={j} className="flex items-center gap-3 bg-gray-800 rounded-xl px-3 py-2">
-                        <span className="text-gray-500 text-xs w-14">Série {s.set_number}</span>
+                        <span className="text-gray-500 text-xs w-14">{t('session.setLabel', { n: s.set_number })}</span>
                         <span className="text-white text-sm">{s.reps} reps</span>
                         {s.weight_kg > 0 && (
                           <span className="text-gray-400 text-sm">× {s.weight_kg} kg</span>
@@ -144,9 +130,22 @@ function SessionCard({ session }) {
 }
 
 export default function HistoryTab() {
+  const { t, lang } = useLang()
+  const locale = lang === 'fr' ? 'fr-FR' : 'en-US'
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
   const [confirmClear, setConfirmClear] = useState(false)
+
+  function formatDate(dateStr) {
+    const todayStr = new Date().toISOString().split('T')[0]
+    const yesterdayDate = new Date()
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1)
+    const yesterdayStr = yesterdayDate.toISOString().split('T')[0]
+    if (dateStr === todayStr) return t('common.today')
+    if (dateStr === yesterdayStr) return t('common.yesterday')
+    const d = new Date(dateStr + 'T12:00:00')
+    return d.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })
+  }
 
   const handleClearHistory = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -184,13 +183,12 @@ export default function HistoryTab() {
     return (
       <div className="flex flex-col items-center justify-center mt-20 gap-2 px-6">
         <Dumbbell size={40} className="text-gray-700" />
-        <p className="text-gray-400 text-center">Aucune séance terminée pour l'instant.</p>
-        <p className="text-gray-600 text-xs text-center">Lance une séance et clique sur "Terminer ✓" pour qu'elle apparaisse ici.</p>
+        <p className="text-gray-400 text-center">{t('history.noHistory')}</p>
+        <p className="text-gray-600 text-xs text-center">{t('history.noHistoryHint')}</p>
       </div>
     )
   }
 
-  // Group sessions by day (YYYY-MM-DD from finished_at)
   const byDay = []
   const dayMap = {}
   for (const s of sessions) {
@@ -208,7 +206,7 @@ export default function HistoryTab() {
         <button onClick={() => setConfirmClear(true)}
           className="flex items-center gap-1.5 text-red-400 text-xs px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors">
           <Trash2 size={13} />
-          Supprimer l'historique
+          {t('history.deleteBtn')}
         </button>
       </div>
       {byDay.map(({ date, sessions: daySessions }) => (
@@ -217,19 +215,20 @@ export default function HistoryTab() {
             {formatDate(date)}
           </p>
           <div className="flex flex-col gap-2">
-            {daySessions.map(s => <SessionCard key={s.id} session={s} />)}
+            {daySessions.map(s => <SessionCard key={s.id} session={s} t={t} locale={locale} />)}
           </div>
         </div>
       ))}
-      <ConfirmModal
-        open={confirmClear}
-        title="Supprimer l'historique"
-        message="Toutes tes séances terminées seront supprimées définitivement. Cette action est irréversible."
-        confirmLabel="Supprimer"
-        variant="danger"
-        onConfirm={() => { setConfirmClear(false); handleClearHistory() }}
-        onCancel={() => setConfirmClear(false)}
-      />
+      {confirmClear && (
+        <ConfirmModal
+          title={t('history.deleteTitle')}
+          description={t('history.deleteDesc')}
+          confirmLabel={t('history.deleteBtn')}
+          variant="danger"
+          onConfirm={() => { setConfirmClear(false); handleClearHistory() }}
+          onCancel={() => setConfirmClear(false)}
+        />
+      )}
     </div>
   )
 }

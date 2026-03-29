@@ -2,13 +2,17 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { TrendingUp } from 'lucide-react'
-
-function formatDate(dateStr) {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
-}
+import { useLang } from '../../context/LangContext'
 
 export default function ProgressTab() {
+  const { t, lang } = useLang()
+  const locale = lang === 'fr' ? 'fr-FR' : 'en-US'
+
+  function formatDate(dateStr) {
+    const d = new Date(dateStr)
+    return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })
+  }
+
   const [exercises, setExercises] = useState([])
   const [selected, setSelected] = useState(null)
   const [chartData, setChartData] = useState([])
@@ -16,7 +20,6 @@ export default function ProgressTab() {
   const [loading, setLoading] = useState(true)
   const [loadingChart, setLoadingChart] = useState(false)
 
-  // 🔹 Récupération des exercices loggés
   useEffect(() => {
     const fetchExercises = async () => {
       try {
@@ -44,7 +47,6 @@ export default function ProgressTab() {
 
         if (setsError) return
 
-        // Récupération unique des exercices
         const unique = []
         const seen = new Set()
         exerciseSets.forEach(s => {
@@ -64,7 +66,6 @@ export default function ProgressTab() {
     fetchExercises()
   }, [])
 
-  // 🔹 Récupération de la progression
   useEffect(() => {
     if (!selected) return
 
@@ -74,7 +75,6 @@ export default function ProgressTab() {
         const { data: { user }, error: userError } = await supabase.auth.getUser()
         if (userError) throw userError
 
-        // Récupérer les sets pour l'exercice sélectionné
         const { data: progressSets, error: progressError } = await supabase
           .from('session_sets')
           .select('session_id, weight_kg, reps, logged_at, workout_sessions!inner(user_id, finished_at)')
@@ -86,7 +86,6 @@ export default function ProgressTab() {
         if (progressError) throw progressError
 
         if (progressSets && progressSets.length > 0) {
-          // Regrouper par session_id
           const bySession = {}
           progressSets.forEach(s => {
             const weight = parseFloat(s.weight_kg)
@@ -108,7 +107,6 @@ export default function ProgressTab() {
 
           setChartData(data)
 
-          // Stats
           const pr = Math.max(...data.map(d => d.poids))
           const lastPoids = data[data.length - 1].poids
           const prevPoids = data.length >= 2 ? data[data.length - 2].poids : null
@@ -128,7 +126,6 @@ export default function ProgressTab() {
     fetchProgress()
   }, [selected])
 
-  // 🔹 Rendu
   if (loading) return (
     <div className="flex justify-center py-12">
       <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -139,8 +136,8 @@ export default function ProgressTab() {
     return (
       <div className="flex flex-col items-center justify-center mt-20 px-4 gap-3">
         <TrendingUp size={40} className="text-gray-700" />
-        <p className="text-gray-400 text-center">Aucune donnée pour l'instant.</p>
-        <p className="text-gray-500 text-sm text-center">Effectue des séances pour voir ta progression ici.</p>
+        <p className="text-gray-400 text-center">{t('progress.noData')}</p>
+        <p className="text-gray-500 text-sm text-center">{t('progress.noDataHint')}</p>
       </div>
     )
 
@@ -148,7 +145,7 @@ export default function ProgressTab() {
     <div className="px-4 flex flex-col gap-4">
       {/* Sélecteur exercice */}
       <div className="flex flex-col gap-2">
-        <p className="text-gray-400 text-sm">Sélectionne un exercice</p>
+        <p className="text-gray-400 text-sm">{t('progress.exercise')}</p>
         <div className="flex flex-wrap gap-2">
           {exercises.map(ex => (
             <button
@@ -166,7 +163,6 @@ export default function ProgressTab() {
         </div>
       </div>
 
-      {/* Affichage graphique ou message */}
       {loadingChart ? (
         <div className="flex justify-center py-8">
           <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -174,7 +170,7 @@ export default function ProgressTab() {
       ) : chartData.length < 2 ? (
         <div className="bg-gray-900 rounded-2xl p-5">
           <p className="text-gray-500 text-sm text-center py-4">
-            Effectue au moins 2 séances avec cet exercice pour voir la progression
+            {t('progress.noDataHint')}
           </p>
         </div>
       ) : (
@@ -194,19 +190,19 @@ export default function ProgressTab() {
                 ) : (
                   <p className="text-gray-500 font-bold">—</p>
                 )}
-                <p className="text-gray-500 text-xs mt-1">vs dernière séance</p>
+                <p className="text-gray-500 text-xs mt-1">vs {lang === 'fr' ? 'dernière séance' : 'last workout'}</p>
               </div>
               <div className="bg-gray-900 rounded-2xl p-3 text-center">
                 <p className="text-white font-bold">{stats.sessions}</p>
-                <p className="text-gray-500 text-xs mt-1">Séances</p>
+                <p className="text-gray-500 text-xs mt-1">{t('progress.sets')}</p>
               </div>
             </div>
           )}
 
           {/* Graphique volume total */}
           <div className="bg-gray-900 rounded-2xl p-5">
-            <h3 className="text-white font-semibold mb-1">Volume total (kg)</h3>
-            <p className="text-gray-500 text-xs mb-4">Somme de poids × reps sur la séance</p>
+            <h3 className="text-white font-semibold mb-1">{lang === 'fr' ? 'Volume total (kg)' : 'Total volume (kg)'}</h3>
+            <p className="text-gray-500 text-xs mb-4">{lang === 'fr' ? 'Somme de poids × reps sur la séance' : 'Sum of weight × reps per workout'}</p>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={chartData}>
                 <XAxis
@@ -227,7 +223,7 @@ export default function ProgressTab() {
                     const point = chartData.find(d => d.sessionId === id)
                     return point ? point.date : id
                   }}
-                  formatter={(value) => [`${value} kg`, 'Volume']}
+                  formatter={(value) => [`${value} kg`, lang === 'fr' ? 'Volume' : 'Volume']}
                 />
                 <Line type="monotone" dataKey="volume" stroke="#6366f1" strokeWidth={2.5} dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 6 }} />
               </LineChart>
@@ -236,8 +232,8 @@ export default function ProgressTab() {
 
           {/* Graphique poids max */}
           <div className="bg-gray-900 rounded-2xl p-5">
-            <h3 className="text-white font-semibold mb-1">Poids max soulevé (kg)</h3>
-            <p className="text-gray-500 text-xs mb-4">Set le plus lourd par séance</p>
+            <h3 className="text-white font-semibold mb-1">{lang === 'fr' ? 'Poids max soulevé (kg)' : 'Max weight lifted (kg)'}</h3>
+            <p className="text-gray-500 text-xs mb-4">{lang === 'fr' ? 'Set le plus lourd par séance' : 'Heaviest set per workout'}</p>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={chartData}>
                 <XAxis
@@ -258,7 +254,7 @@ export default function ProgressTab() {
                     const point = chartData.find(d => d.sessionId === id)
                     return point ? point.date : id
                   }}
-                  formatter={(value) => [`${value} kg`, 'Poids max']}
+                  formatter={(value) => [`${value} kg`, lang === 'fr' ? 'Poids max' : 'Max weight']}
                 />
                 <Line
                   type="monotone"
@@ -271,54 +267,49 @@ export default function ProgressTab() {
               </LineChart>
             </ResponsiveContainer>
           </div>
-          {/* Bouton Supprimer progression */}
-            {chartData.length > 0 && (
-              <div className="flex justify-end">
-                <button
-                  className="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded-xl text-sm transition-colors"
-                  onClick={async () => {
-                    if (!selected) return
-                    try {
-                      setLoadingChart(true)
-                      const { data: { user }, error: userError } = await supabase.auth.getUser()
-                      if (userError) throw userError
 
-                      // Récupérer les sessions de l'utilisateur
-                      const { data: sessions, error: sessionsError } = await supabase
-                        .from('workout_sessions')
-                        .select('id')
-                        .eq('user_id', user.id)
-                      if (sessionsError) throw sessionsError
+          {chartData.length > 0 && (
+            <div className="flex justify-end">
+              <button
+                className="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded-xl text-sm transition-colors"
+                onClick={async () => {
+                  if (!selected) return
+                  try {
+                    setLoadingChart(true)
+                    const { data: { user }, error: userError } = await supabase.auth.getUser()
+                    if (userError) throw userError
 
-                      const sessionIds = sessions.map(s => s.id)
+                    const { data: sessions, error: sessionsError } = await supabase
+                      .from('workout_sessions')
+                      .select('id')
+                      .eq('user_id', user.id)
+                    if (sessionsError) throw sessionsError
 
-                      // Supprimer les sets pour cet exercice et ces sessions
-                      const { error: deleteError } = await supabase
-                        .from('session_sets')
-                        .delete()
-                        .in('session_id', sessionIds)
-                        .eq('exercise_id', selected.id)
+                    const sessionIds = sessions.map(s => s.id)
 
-                      if (deleteError) throw deleteError
+                    const { error: deleteError } = await supabase
+                      .from('session_sets')
+                      .delete()
+                      .in('session_id', sessionIds)
+                      .eq('exercise_id', selected.id)
 
-                      // Mettre à jour l'état local
-                      setChartData([])
-                      setStats(null)
+                    if (deleteError) throw deleteError
 
-                      // Optionnel : retirer l'exercice de la liste si tu veux
-                      setExercises(prev => prev.filter(ex => ex.id !== selected.id))
-                      setSelected(null)
-                    } catch (err) {
-                      console.error("Erreur suppression progression :", err)
-                    } finally {
-                      setLoadingChart(false)
-                    }
-                  }}
-                >
-                  Supprimer la progression
-                </button>
-              </div>
-            )}
+                    setChartData([])
+                    setStats(null)
+                    setExercises(prev => prev.filter(ex => ex.id !== selected.id))
+                    setSelected(null)
+                  } catch (err) {
+                    console.error('Erreur suppression progression :', err)
+                  } finally {
+                    setLoadingChart(false)
+                  }
+                }}
+              >
+                {lang === 'fr' ? 'Supprimer la progression' : 'Delete progress'}
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

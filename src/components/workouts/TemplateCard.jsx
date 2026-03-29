@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { Trash2, Copy, Play, Dumbbell } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import ConfirmModal from '../ui/ConfirmModal'
+import { useLang } from '../../context/LangContext'
 
 export default function TemplateCard({ template, onStart, onDelete, onDuplicate }) {
+  const { t } = useLang()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const exercises = template.template_exercises || []
 
@@ -27,7 +29,7 @@ export default function TemplateCard({ template, onStart, onDelete, onDuplicate 
     const { data: { user } } = await supabase.auth.getUser()
     const { data: newTemplate } = await supabase
       .from('workout_templates')
-      .insert({ name: `${template.name} (copie)`, user_id: user.id })
+      .insert({ name: t('workouts.copyOf', { name: template.name }), user_id: user.id })
       .select()
       .single()
 
@@ -56,13 +58,13 @@ export default function TemplateCard({ template, onStart, onDelete, onDuplicate 
               <h2 className="text-white font-bold text-lg leading-tight">{template.name}</h2>
               {template.is_default && (
                 <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/30 shrink-0">
-                  Modèle
+                  {t('workouts.modelBadge')}
                 </span>
               )}
             </div>
             {/* Méta : exercices + durée */}
             <p className="text-gray-500 text-xs">
-              {exercises.length} exercice{exercises.length > 1 ? 's' : ''} · ~{estimatedMinutes} min
+              {t('workouts.exerciseCount', { n: exercises.length, s: exercises.length > 1 ? 's' : '' })} · {t('workouts.estimatedTime', { n: estimatedMinutes })}
             </p>
           </div>
 
@@ -72,7 +74,7 @@ export default function TemplateCard({ template, onStart, onDelete, onDuplicate 
               <button
                 onClick={handleDuplicate}
                 className="text-gray-600 hover:text-indigo-400 p-2 rounded-xl transition-colors"
-                title="Dupliquer pour personnaliser"
+                title={t('workouts.duplicateTitle')}
               >
                 <Copy size={16} />
               </button>
@@ -122,14 +124,14 @@ export default function TemplateCard({ template, onStart, onDelete, onDuplicate 
         className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold py-3.5 transition-colors"
       >
         <Play size={16} fill="white" />
-        Démarrer la séance
+        {t('workouts.startSession')}
       </button>
 
       {confirmDelete && (
         <ConfirmModal
-          title="Supprimer la séance ?"
-          description={`"${template.name}" sera définitivement supprimée.`}
-          confirmLabel="Supprimer"
+          title={t('workouts.deleteTitle')}
+          description={t('workouts.deleteDesc', { name: template.name })}
+          confirmLabel={t('common.delete')}
           onConfirm={() => { setConfirmDelete(false); handleDelete() }}
           onCancel={() => setConfirmDelete(false)}
         />

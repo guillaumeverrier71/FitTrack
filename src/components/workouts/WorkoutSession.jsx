@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import ConfirmModal from '../ui/ConfirmModal'
 import { useToast } from '../../context/ToastContext'
 import { handleSupabaseError } from '../../lib/handleError'
+import { useLang } from '../../context/LangContext'
 
 function getSuggestion(lastWeight, lastReps) {
   if (!lastWeight || !lastReps) return null
@@ -26,6 +27,7 @@ const DEFAULT_REST = 90
 
 export default function WorkoutSession({ template, onMinimize, onDone }) {
   const toast = useToast()
+  const { t } = useLang()
   const [sessionId, setSessionId] = useState(null)
   const [sets, setSets] = useState({})
   const [lastSession, setLastSession] = useState({})
@@ -34,7 +36,6 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
   const [paused, setPaused] = useState(false)
   const [confirmAbandon, setConfirmAbandon] = useState(false)
 
-  // Rest timer
   const [restTimer, setRestTimer] = useState({ active: false, remaining: DEFAULT_REST, total: DEFAULT_REST })
 
   const intervalRef = useRef(null)
@@ -47,7 +48,6 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
     return () => clearInterval(intervalRef.current)
   }, [paused])
 
-  // Rest timer countdown
   useEffect(() => {
     if (!restTimer.active) return
     const id = setInterval(() => {
@@ -205,7 +205,6 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
 
     toast.success('Séance enregistrée !')
 
-    // Notification locale de fin de séance
     if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
       const reg = await navigator.serviceWorker.ready
       reg.showNotification('Séance terminée ! 💪', {
@@ -227,7 +226,6 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
     onDone()
   }
 
-  // Rest timer progress
   const restCircumference = 2 * Math.PI * 22
   const restProgress = restTimer.active ? restTimer.remaining / restTimer.total : 0
 
@@ -262,7 +260,6 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
           return (
             <div key={ex.exercise_id} className="flex flex-col gap-3">
 
-              {/* Titre + groupe musculaire */}
               <div className="flex items-center gap-2">
                 <span className="text-indigo-400 text-xs bg-indigo-950 px-2 py-0.5 rounded-full">
                   {ex.exercises?.muscle_groups?.name}
@@ -270,7 +267,6 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
                 <h2 className="text-white font-semibold">{ex.exercises?.name}</h2>
               </div>
 
-              {/* GIF */}
               {ex.exercises?.gif_url && (
                 <img
                   src={ex.exercises.gif_url}
@@ -280,11 +276,10 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
                 />
               )}
 
-              {/* Header colonnes */}
               <div className="grid grid-cols-4 gap-2 px-1">
-                <span className="text-gray-500 text-xs text-center">Série</span>
-                <span className="text-gray-500 text-xs text-center">Reps</span>
-                <span className="text-gray-500 text-xs text-center">Poids (kg)</span>
+                <span className="text-gray-500 text-xs text-center">{t('session.setLabel', { n: '' }).trim()}</span>
+                <span className="text-gray-500 text-xs text-center">{t('session.reps')}</span>
+                <span className="text-gray-500 text-xs text-center">{t('session.weightKg')}</span>
                 <span className="text-gray-500 text-xs text-center">✓</span>
               </div>
 
@@ -321,15 +316,14 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
                       </button>
                     </div>
 
-                    {/* Dernière fois + suggestion */}
                     {lastSet && (
                       <div className="flex items-center gap-3 px-2">
                         <span className="text-gray-600 text-xs">
-                          Dernière fois : {lastSet.reps} reps × {lastSet.weight}kg
+                          {`${lastSet.reps} reps × ${lastSet.weight}kg`}
                         </span>
                         {suggestion && (
                           <span className="text-indigo-400 text-xs">
-                            → {suggestion.reps} reps × {suggestion.weight}kg ({suggestion.reason})
+                            → {suggestion.reps} reps × {suggestion.weight}kg
                           </span>
                         )}
                       </div>
@@ -342,7 +336,7 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
                 onClick={() => addSet(ex.exercise_id)}
                 className="flex items-center gap-2 text-indigo-400 text-sm py-2 hover:text-indigo-300 transition-colors"
               >
-                <Plus size={16} /> Ajouter une série
+                <Plus size={16} /> {t('session.addSet')}
               </button>
             </div>
           )
@@ -352,11 +346,9 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
       {/* Boutons bas + minuteur de repos */}
       <div className="fixed bottom-16 left-0 right-0 bg-gray-950 border-t border-gray-800">
 
-        {/* Minuteur de repos */}
         {restTimer.active && (
           <div className="px-4 pt-3 pb-2 border-b border-gray-800">
             <div className="flex items-center gap-4">
-              {/* Arc de progression */}
               <div className="relative w-14 h-14 shrink-0">
                 <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
                   <circle cx="28" cy="28" r="22" fill="none" stroke="#1f2937" strokeWidth="5" />
@@ -379,7 +371,7 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
               </div>
 
               <div className="flex-1">
-                <p className="text-gray-400 text-xs mb-1.5">Temps de repos</p>
+                <p className="text-gray-400 text-xs mb-1.5">{t('common.skip')}</p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => adjustRest(-30)}
@@ -391,7 +383,7 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
                     onClick={skipRest}
                     className="flex-1 bg-indigo-600 text-white text-sm py-1.5 rounded-xl font-medium"
                   >
-                    Passer
+                    {t('common.skip')}
                   </button>
                   <button
                     onClick={() => adjustRest(30)}
@@ -410,23 +402,23 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
             onClick={() => setConfirmAbandon(true)}
             className="bg-gray-800 hover:bg-red-950 text-red-400 font-semibold py-4 px-5 rounded-xl transition-colors"
           >
-            Abandonner
+            {t('common.cancel')}
           </button>
           <button
             onClick={handleFinish}
             disabled={saving}
             className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-semibold py-4 rounded-xl transition-colors"
           >
-            {saving ? 'Enregistrement...' : 'Terminer ✓'}
+            {saving ? t('common.saving') : t('session.finishBtn')}
           </button>
         </div>
       </div>
 
       {confirmAbandon && (
         <ConfirmModal
-          title="Abandonner la séance ?"
-          description="Les séries enregistrées seront perdues définitivement."
-          confirmLabel="Abandonner"
+          title={t('session.finishTitle')}
+          description={t('session.finishDesc')}
+          confirmLabel={t('common.confirm')}
           onConfirm={() => { setConfirmAbandon(false); handleAbandon() }}
           onCancel={() => setConfirmAbandon(false)}
         />

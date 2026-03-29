@@ -8,15 +8,7 @@ import { supabase } from '../../lib/supabase'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { useOfflineSync } from '../../hooks/useOfflineSync'
 import { useToast } from '../../context/ToastContext'
-
-const navItems = [
-  { to: '/', icon: Home, label: 'Accueil' },
-  { to: '/workouts', icon: Dumbbell, label: 'Séances' },
-  { to: '/steps', icon: Footprints, label: 'Pas' },
-  { to: '/nutrition', icon: Flame, label: 'Calories' },
-  { to: '/weight', icon: Scale, label: 'Poids' },
-  { to: '/profile', icon: User, label: 'Profil' },
-]
+import { useLang } from '../../context/LangContext'
 
 export default function AppLayout() {
   const { activeSession, sessionVisible, minimizeSession, resumeSession, closeSession } = useSession()
@@ -24,16 +16,26 @@ export default function AppLayout() {
   const isOnline = useOnlineStatus()
   const toast = useToast()
   const { syncing, pendingCount } = useOfflineSync()
+  const { t } = useLang()
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [onboardingUserId, setOnboardingUserId] = useState(null)
 
+  const navItems = [
+    { to: '/', icon: Home, label: t('nav.home') },
+    { to: '/workouts', icon: Dumbbell, label: t('nav.workouts') },
+    { to: '/steps', icon: Footprints, label: t('nav.steps') },
+    { to: '/nutrition', icon: Flame, label: t('nav.nutrition') },
+    { to: '/weight', icon: Scale, label: t('nav.weight') },
+    { to: '/profile', icon: User, label: t('nav.profile') },
+  ]
+
   useEffect(() => {
     const handler = (e) => {
-      toast.success(`${e.detail.count} modification${e.detail.count > 1 ? 's' : ''} synchronisée${e.detail.count > 1 ? 's' : ''} !`)
+      toast.success(t('layout.syncDone', { n: e.detail.count, s: e.detail.count > 1 ? 's' : '' }))
     }
     window.addEventListener('bp-sync-complete', handler)
     return () => window.removeEventListener('bp-sync-complete', handler)
-  }, [toast])
+  }, [toast, t])
 
   useEffect(() => {
     const checkOnboarding = async () => {
@@ -80,13 +82,15 @@ export default function AppLayout() {
           {syncing ? (
             <>
               <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-              <p className="text-indigo-300 text-xs font-medium">Synchronisation en cours...</p>
+              <p className="text-indigo-300 text-xs font-medium">{t('layout.syncing')}</p>
             </>
           ) : (
             <>
               <div className="w-2 h-2 rounded-full bg-gray-400" />
               <p className="text-gray-300 text-xs font-medium">
-                Hors-ligne{pendingCount > 0 ? ` — ${pendingCount} modification${pendingCount > 1 ? 's' : ''} en attente` : ' — données en cache'}
+                {pendingCount > 0
+                  ? t('layout.offlinePending', { n: pendingCount, s: pendingCount > 1 ? 's' : '' })
+                  : t('layout.offlineCache')}
               </p>
             </>
           )}
@@ -109,11 +113,11 @@ export default function AppLayout() {
             <div className="flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
               <div className="text-left">
-                <p className="text-indigo-300 text-sm font-semibold">Séance en cours</p>
+                <p className="text-indigo-300 text-sm font-semibold">{t('layout.sessionBanner')}</p>
                 <p className="text-gray-400 text-xs">{activeSession.name}</p>
               </div>
             </div>
-            <span className="text-indigo-400 text-sm font-medium">Reprendre →</span>
+            <span className="text-indigo-400 text-sm font-medium">{t('session.resume')}</span>
           </button>
         </div>
       )}

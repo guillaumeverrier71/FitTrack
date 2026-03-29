@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Search, Plus, X, Clock, Globe, Loader, Camera, AlertCircle } from 'lucide-react'
 import BarcodeScanner from './BarcodeScanner'
+import { useLang } from '../../context/LangContext'
 
 async function searchOpenFoodFacts(query) {
   try {
@@ -40,7 +41,7 @@ async function fetchByBarcode(barcode) {
     const n = p.nutriments || {}
     return {
       id: `off_${barcode}`,
-      name: p.product_name || p.product_name_fr || 'Produit scanné',
+      name: p.product_name || p.product_name_fr || null,
       calories_per_100g: Math.round(n['energy-kcal_100g'] || 0),
       proteins_per_100g: Math.round((n.proteins_100g || 0) * 10) / 10,
       carbs_per_100g: Math.round((n.carbohydrates_100g || 0) * 10) / 10,
@@ -55,6 +56,7 @@ async function fetchByBarcode(barcode) {
 }
 
 export default function FoodSearch({ category, onAdd, onClose }) {
+  const { t } = useLang()
   const [query, setQuery] = useState('')
   const [localResults, setLocalResults] = useState([])
   const [offResults, setOffResults] = useState([])
@@ -153,9 +155,10 @@ export default function FoodSearch({ category, onAdd, onClose }) {
     setBarcodeError(null)
     const food = await fetchByBarcode(barcode)
     if (food) {
+      food.name = food.name || t('nutrition.foodScanned')
       handleSelectOFF(food)
     } else {
-      setBarcodeError(`Produit introuvable pour le code ${barcode}`)
+      setBarcodeError(t('nutrition.foodNotFound', { code: barcode }))
     }
   }
 
@@ -212,7 +215,7 @@ export default function FoodSearch({ category, onAdd, onClose }) {
       <div className="bg-gray-900 w-full rounded-t-3xl max-h-[90vh] flex flex-col">
 
         <div className="flex items-center justify-between p-4 border-b border-gray-800">
-          <h2 className="text-white font-semibold capitalize">Ajouter — {category}</h2>
+          <h2 className="text-white font-semibold capitalize">{t('nutrition.foodSearchTitle', { cat: category })}</h2>
           <button onClick={onClose}><X size={22} className="text-gray-400" /></button>
         </div>
 
@@ -221,13 +224,13 @@ export default function FoodSearch({ category, onAdd, onClose }) {
             <div className="bg-gray-800 rounded-xl p-4">
               <p className="text-white font-semibold mb-1">{selected.name}</p>
               <p className="text-gray-400 text-xs">
-                Pour {isUnit ? '1 unité' : '100g'} : {selected.calories_per_100g} kcal · {selected.proteins_per_100g}g prot · {selected.carbs_per_100g}g gluc · {selected.fats_per_100g}g lip
+                {isUnit ? t('nutrition.foodForUnit') : t('nutrition.foodFor100g')} : {selected.calories_per_100g} kcal · {selected.proteins_per_100g}g {t('nutrition.foodProt')} · {selected.carbs_per_100g}g {t('nutrition.foodGluc')} · {selected.fats_per_100g}g {t('nutrition.foodLip')}
               </p>
             </div>
 
             <div>
               <label className="text-gray-400 text-xs mb-1 block">
-                {isUnit ? 'Nombre d\'unités' : 'Quantité (g)'}
+                {isUnit ? t('nutrition.foodQuantityUnits') : t('nutrition.foodQuantityG')}
               </label>
               <input
                 type="number"
@@ -240,10 +243,10 @@ export default function FoodSearch({ category, onAdd, onClose }) {
 
             <div className="grid grid-cols-4 gap-2">
               {[
-                { label: 'Calories', value: Math.round(calcMacro(selected.calories_per_100g, parseFloat(quantity) || 0, isUnit)), unit: 'kcal', color: 'text-orange-400' },
-                { label: 'Protéines', value: calcMacro(selected.proteins_per_100g, parseFloat(quantity) || 0, isUnit), unit: 'g', color: 'text-blue-400' },
-                { label: 'Glucides', value: calcMacro(selected.carbs_per_100g, parseFloat(quantity) || 0, isUnit), unit: 'g', color: 'text-yellow-400' },
-                { label: 'Lipides', value: calcMacro(selected.fats_per_100g, parseFloat(quantity) || 0, isUnit), unit: 'g', color: 'text-red-400' },
+                { label: t('nutrition.foodCaloriesLabel'), value: Math.round(calcMacro(selected.calories_per_100g, parseFloat(quantity) || 0, isUnit)), unit: 'kcal', color: 'text-orange-400' },
+                { label: t('nutrition.foodProteinsLabel'), value: calcMacro(selected.proteins_per_100g, parseFloat(quantity) || 0, isUnit), unit: 'g', color: 'text-blue-400' },
+                { label: t('nutrition.foodCarbsLabel'), value: calcMacro(selected.carbs_per_100g, parseFloat(quantity) || 0, isUnit), unit: 'g', color: 'text-yellow-400' },
+                { label: t('nutrition.foodFatsLabel'), value: calcMacro(selected.fats_per_100g, parseFloat(quantity) || 0, isUnit), unit: 'g', color: 'text-red-400' },
               ].map(macro => (
                 <div key={macro.label} className="bg-gray-800 rounded-xl p-2 text-center">
                   <p className={`font-bold text-sm ${macro.color}`}>{macro.value}</p>
@@ -255,33 +258,33 @@ export default function FoodSearch({ category, onAdd, onClose }) {
 
             <div className="flex gap-2">
               <button onClick={() => setSelected(null)} className="flex-1 bg-gray-800 text-gray-400 font-semibold py-3 rounded-xl">
-                Retour
+                {t('common.back')}
               </button>
               <button onClick={handleAdd} className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl">
-                Ajouter
+                {t('nutrition.addMeal')}
               </button>
             </div>
           </div>
         ) : showCustomForm ? (
           <div className="flex flex-col gap-3 p-4 overflow-y-auto">
-            <p className="text-gray-400 text-sm">Valeurs pour 100g</p>
-            <input type="text" placeholder="Nom de l'aliment" value={customName} onChange={e => setCustomName(e.target.value)}
+            <p className="text-gray-400 text-sm">{t('nutrition.foodCustomValues')}</p>
+            <input type="text" placeholder={t('nutrition.foodCustomName')} value={customName} onChange={e => setCustomName(e.target.value)}
               className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
-            <input type="number" placeholder="Calories (kcal)" value={customCals} onChange={e => setCustomCals(e.target.value)}
+            <input type="number" placeholder={t('nutrition.foodCustomCals')} value={customCals} onChange={e => setCustomCals(e.target.value)}
               className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" />
-            <input type="number" placeholder="Protéines (g)" value={customProteins} onChange={e => setCustomProteins(e.target.value)}
+            <input type="number" placeholder={t('nutrition.foodCustomProteins')} value={customProteins} onChange={e => setCustomProteins(e.target.value)}
               className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" />
-            <input type="number" placeholder="Glucides (g)" value={customCarbs} onChange={e => setCustomCarbs(e.target.value)}
+            <input type="number" placeholder={t('nutrition.foodCustomCarbs')} value={customCarbs} onChange={e => setCustomCarbs(e.target.value)}
               className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" />
-            <input type="number" placeholder="Lipides (g)" value={customFats} onChange={e => setCustomFats(e.target.value)}
+            <input type="number" placeholder={t('nutrition.foodCustomFats')} value={customFats} onChange={e => setCustomFats(e.target.value)}
               className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500" />
             <div className="flex gap-2">
               <button onClick={() => setShowCustomForm(false)} className="flex-1 bg-gray-800 text-gray-400 font-semibold py-3 rounded-xl">
-                Retour
+                {t('common.back')}
               </button>
               <button onClick={handleAddCustom} disabled={!customName || !customCals}
                 className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl">
-                Créer
+                {t('nutrition.foodCreate')}
               </button>
             </div>
           </div>
@@ -293,7 +296,7 @@ export default function FoodSearch({ category, onAdd, onClose }) {
                   <Search size={18} className="text-gray-500 shrink-0" />
                   <input
                     type="text"
-                    placeholder="Rechercher un aliment..."
+                    placeholder={t('nutrition.foodSearch') + '...'}
                     value={query}
                     onChange={e => { setQuery(e.target.value); setBarcodeError(null) }}
                     className="bg-transparent text-white outline-none flex-1 placeholder-gray-500"
@@ -304,7 +307,7 @@ export default function FoodSearch({ category, onAdd, onClose }) {
                 <button
                   onClick={() => setShowScanner(true)}
                   className="bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white p-3 rounded-xl transition-colors shrink-0"
-                  title="Scanner un code-barres"
+                  title={t('nutrition.foodScanBarcode')}
                 >
                   <Camera size={20} />
                 </button>
@@ -318,7 +321,7 @@ export default function FoodSearch({ category, onAdd, onClose }) {
               )}
 
               <button onClick={() => setShowCustomForm(true)} className="flex items-center gap-2 text-indigo-400 text-sm">
-                <Plus size={16} /> Ajouter un aliment personnalisé
+                <Plus size={16} /> {t('nutrition.foodAddCustom')}
               </button>
             </div>
 
@@ -327,16 +330,16 @@ export default function FoodSearch({ category, onAdd, onClose }) {
                 <>
                   <div className="flex items-center gap-2 mb-1">
                     <Clock size={14} className="text-gray-500" />
-                    <span className="text-gray-500 text-xs">Récents</span>
+                    <span className="text-gray-500 text-xs">{t('nutrition.foodRecent')}</span>
                   </div>
                   {recent.map(food => (
-                    <FoodRow key={food.id} food={food} onSelect={handleSelect} />
+                    <FoodRow key={food.id} food={food} onSelect={handleSelect} t={t} />
                   ))}
                 </>
               )}
 
               {hasQuery && localResults.length > 0 && localResults.map(food => (
-                <FoodRow key={food.id} food={food} onSelect={handleSelect} />
+                <FoodRow key={food.id} food={food} onSelect={handleSelect} t={t} />
               ))}
 
               {hasQuery && offResults.length > 0 && (
@@ -346,13 +349,13 @@ export default function FoodSearch({ category, onAdd, onClose }) {
                     <span className="text-indigo-400 text-xs">OpenFoodFacts</span>
                   </div>
                   {offResults.map(food => (
-                    <FoodRow key={food.id} food={food} onSelect={handleSelectOFF} />
+                    <FoodRow key={food.id} food={food} onSelect={handleSelectOFF} t={t} />
                   ))}
                 </>
               )}
 
               {hasQuery && !offLoading && !hasAnyResults && (
-                <p className="text-gray-500 text-sm text-center py-4">Aucun résultat pour "{query}"</p>
+                <p className="text-gray-500 text-sm text-center py-4">{t('nutrition.foodNoResults', { query })}</p>
               )}
             </div>
           </div>
@@ -362,7 +365,7 @@ export default function FoodSearch({ category, onAdd, onClose }) {
   )
 }
 
-function FoodRow({ food, onSelect }) {
+function FoodRow({ food, onSelect, t }) {
   return (
     <button
       onClick={() => onSelect(food)}
@@ -371,8 +374,8 @@ function FoodRow({ food, onSelect }) {
       <div className="flex-1 min-w-0">
         <p className="text-white text-sm font-medium truncate">{food.name}</p>
         <p className="text-gray-400 text-xs mt-0.5">
-          {food.calories_per_100g} kcal · {food.proteins_per_100g}g prot · {food.carbs_per_100g}g gluc · {food.fats_per_100g}g lip
-          {food.unit === 'unité' ? ' (par unité)' : ' (par 100g)'}
+          {food.calories_per_100g} kcal · {food.proteins_per_100g}g {t('nutrition.foodProt')} · {food.carbs_per_100g}g {t('nutrition.foodGluc')} · {food.fats_per_100g}g {t('nutrition.foodLip')}
+          {food.unit === 'unité' ? ` ${t('nutrition.foodPerUnit')}` : ` ${t('nutrition.foodPer100g')}`}
         </p>
       </div>
       <Plus size={18} className="text-indigo-400 ml-3 shrink-0" />

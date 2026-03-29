@@ -6,14 +6,11 @@ import { useToast } from '../../context/ToastContext'
 import { handleSupabaseError } from '../../lib/handleError'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { offlineQueue } from '../../lib/offlineQueue'
+import { useLang } from '../../context/LangContext'
+import { useUnits } from '../../context/UnitContext'
 
 function getToday() {
   return new Date().toISOString().split('T')[0]
-}
-
-function formatDate(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
 }
 
 function calculateBMI(weightKg, heightCm) {
@@ -22,17 +19,21 @@ function calculateBMI(weightKg, heightCm) {
   return (weightKg / (heightM * heightM)).toFixed(1)
 }
 
-function getBMICategory(bmi) {
+function getBMICategory(bmi, t) {
   if (!bmi) return null
-  if (bmi < 18.5) return { label: 'Insuffisance pondérale', color: 'text-blue-400' }
-  if (bmi < 25) return { label: 'Poids normal', color: 'text-green-400' }
-  if (bmi < 30) return { label: 'Surpoids', color: 'text-orange-400' }
-  return { label: 'Obésité', color: 'text-red-400' }
+  if (bmi < 18.5) return { label: t('weight.bmiUnderweight'), color: 'text-blue-400' }
+  if (bmi < 25) return { label: t('weight.bmiNormal'), color: 'text-green-400' }
+  if (bmi < 30) return { label: t('weight.bmiOverweight'), color: 'text-orange-400' }
+  return { label: t('weight.bmiObese'), color: 'text-red-400' }
 }
 
 export default function WeightPage() {
   const toast = useToast()
   const isOnline = useOnlineStatus()
+  const { t, lang } = useLang()
+  const locale = lang === 'fr' ? 'fr-FR' : 'en-US'
+  const { fmtWeight, fmtHeight, toWeightDisplay, fromWeightInput, weightLabel } = useUnits()
+
   const [entries, setEntries] = useState([])
   const [profile, setProfile] = useState(null)
   const [period, setPeriod] = useState(30)
@@ -43,6 +44,11 @@ export default function WeightPage() {
   const [inputGoal, setInputGoal] = useState('')
   const [inputGender, setInputGender] = useState('')
   const [loading, setLoading] = useState(true)
+
+  function formatDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00')
+    return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })
+  }
 
   const fetchData = async () => {
     try {
@@ -69,13 +75,13 @@ export default function WeightPage() {
       setProfile(profileData)
 
       const todayEntry = weightData?.find(e => e.date === getToday())
-      setInputWeight(todayEntry?.weight_kg?.toString() || '')
+      setInputWeight(todayEntry ? toWeightDisplay(todayEntry.weight_kg) : '')
       setInputHeight(profileData?.height_cm?.toString() || '')
-      setInputGoal(profileData?.weight_goal_kg?.toString() || '')
+      setInputGoal(profileData?.weight_goal_kg ? toWeightDisplay(profileData.weight_goal_kg) : '')
       setInputGender(profileData?.gender || '')
       setLoading(false)
     } catch (err) {
-      await handleSupabaseError(err, toast, 'Erreur de chargement.')
+      await handleSupabaseError(err, toast, t('weight.errorLoad'))
     }
   }
 
@@ -92,30 +98,31 @@ export default function WeightPage() {
       if (!isOnline) {
         const { data: { user } } = await supabase.auth.getUser()
         const today = getToday()
+        const weightKg = fromWeightInput(inputWeight)
         offlineQueue.add('upsert', 'weight_entries', {
           user_id: user.id,
           date: today,
-          weight_kg: parseFloat(inputWeight),
+          weight_kg: weightKg,
         }, { upsertOptions: { onConflict: 'user_id,date' } })
         setEntries(prev => {
           const filtered = prev.filter(e => e.date !== today)
-          return [...filtered, { date: today, weight_kg: parseFloat(inputWeight) }].sort((a, b) => a.date.localeCompare(b.date))
+          return [...filtered, { date: today, weight_kg: weightKg }].sort((a, b) => a.date.localeCompare(b.date))
         })
         setEditing(false)
-        toast.info('Poids enregistré hors-ligne — sera synchronisé à la reconnexion.')
+        toast.info(t('weight.savedOffline'))
         return
       }
       const { data: { user } } = await supabase.auth.getUser()
       await supabase.from('weight_entries').upsert({
         user_id: user.id,
         date: getToday(),
-        weight_kg: parseFloat(inputWeight),
+        weight_kg: fromWeightInput(inputWeight),
       }, { onConflict: 'user_id,date' })
       setEditing(false)
-      toast.success('Poids enregistré !')
+      toast.success(t('weight.savedSuccess'))
       fetchData()
     } catch (err) {
-      await handleSupabaseError(err, toast, 'Erreur lors de l\'enregistrement du poids.')
+      await handleSupabaseError(err, toast, t('weight.errorSave'))
     }
   }
 
@@ -125,14 +132,14 @@ export default function WeightPage() {
       await supabase.from('user_profile').upsert({
         user_id: user.id,
         height_cm: parseFloat(inputHeight) || null,
-        weight_goal_kg: parseFloat(inputGoal) || null,
+        weight_goal_kg: fromWeightInput(inputGoal) || null,
         gender: inputGender || null,
       }, { onConflict: 'user_id' })
       setEditingProfile(false)
-      toast.success('Objectif mis à jour !')
+      toast.success(t('weight.goalUpdated'))
       fetchData()
     } catch (err) {
-      await handleSupabaseError(err, toast, 'Erreur lors de la mise à jour du profil.')
+      await handleSupabaseError(err, toast, t('weight.errorProfile'))
     }
   }
 
@@ -153,29 +160,30 @@ export default function WeightPage() {
     : null
 
   const bmi = calculateBMI(latestWeight, profile?.height_cm)
-  const bmiCategory = getBMICategory(bmi)
+  const bmiCategory = getBMICategory(bmi, t)
 
+  const toDisplay = (kg) => parseFloat(toWeightDisplay(kg))
   const chartData = entries.map(e => ({
     date: formatDate(e.date),
-    poids: parseFloat(e.weight_kg),
+    poids: toDisplay(e.weight_kg),
   }))
 
-  const goalWeight = profile?.weight_goal_kg ? parseFloat(profile.weight_goal_kg) : null
-  const allWeights = entries.map(e => parseFloat(e.weight_kg))
+  const goalWeight = profile?.weight_goal_kg ? toDisplay(profile.weight_goal_kg) : null
+  const allWeights = entries.map(e => toDisplay(e.weight_kg))
   if (goalWeight) allWeights.push(goalWeight)
   const minWeight = allWeights.length > 0 ? Math.min(...allWeights) - 2 : 50
   const maxWeight = allWeights.length > 0 ? Math.max(...allWeights) + 2 : 100
 
   return (
     <div className="p-4 pb-24 bg-gray-950 min-h-screen flex flex-col gap-4">
-      <h1 className="text-2xl font-bold text-white">Suivi du poids</h1>
+      <h1 className="text-2xl font-bold text-white">{t('weight.title')}</h1>
 
       {/* Card poids aujourd'hui */}
       <div className="bg-gray-900 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Scale size={18} className="text-indigo-400" />
-            <span className="text-gray-400 text-sm">Aujourd'hui</span>
+            <span className="text-gray-400 text-sm">{t('weight.today')}</span>
           </div>
           <button
             onClick={() => setEditing(!editing)}
@@ -192,7 +200,7 @@ export default function WeightPage() {
               step="0.1"
               value={inputWeight}
               onChange={e => setInputWeight(e.target.value)}
-              placeholder="Poids en kg (ex: 75.5)"
+              placeholder={`ex: ${weightLabel === 'lbs' ? '165' : '75.5'} ${weightLabel}`}
               className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full text-lg"
               autoFocus
             />
@@ -201,16 +209,16 @@ export default function WeightPage() {
               disabled={!inputWeight}
               className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
             >
-              Enregistrer
+              {t('weight.saveBtn')}
             </button>
           </div>
         ) : (
           <div className="flex items-end gap-4">
             <div>
               <span className="text-5xl font-bold text-white">
-                {latestWeight ? `${latestWeight}` : '—'}
+                {latestWeight ? toWeightDisplay(latestWeight) : '—'}
               </span>
-              <span className="text-gray-400 text-xl ml-1">kg</span>
+              <span className="text-gray-400 text-xl ml-1">{weightLabel}</span>
             </div>
             {weekDiff !== null && (
               <div className={`flex items-center gap-1 mb-1 ${
@@ -221,7 +229,7 @@ export default function WeightPage() {
                  parseFloat(weekDiff) > 0 ? <TrendingUp size={16} /> :
                  <Minus size={16} />}
                 <span className="text-sm font-medium">
-                  {parseFloat(weekDiff) > 0 ? '+' : ''}{weekDiff} kg cette semaine
+                  {parseFloat(weekDiff) > 0 ? '+' : ''}{fmtWeight(Math.abs(parseFloat(weekDiff)))} {t('weight.thisWeek')}
                 </span>
               </div>
             )}
@@ -235,19 +243,19 @@ export default function WeightPage() {
         <div className="bg-gray-900 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <Target size={16} className="text-green-400" />
-            <span className="text-gray-400 text-xs">Objectif</span>
+            <span className="text-gray-400 text-xs">{t('weight.goal')}</span>
           </div>
           {profile?.weight_goal_kg ? (
             <>
-              <p className="text-white font-bold text-xl">{profile.weight_goal_kg} kg</p>
+              <p className="text-white font-bold text-xl">{fmtWeight(profile.weight_goal_kg)}</p>
               {latestWeight && (
                 <p className="text-gray-400 text-xs mt-1">
-                  {Math.abs(latestWeight - profile.weight_goal_kg).toFixed(1)} kg {latestWeight > profile.weight_goal_kg ? 'à perdre' : 'à prendre'}
+                  {fmtWeight(Math.abs(latestWeight - profile.weight_goal_kg))} {latestWeight > profile.weight_goal_kg ? t('weight.tolose') : t('weight.togain')}
                 </p>
               )}
             </>
           ) : (
-            <p className="text-gray-500 text-sm">Non défini</p>
+            <p className="text-gray-500 text-sm">{t('weight.goalNotSet')}</p>
           )}
         </div>
 
@@ -255,7 +263,7 @@ export default function WeightPage() {
         <div className="bg-gray-900 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <Scale size={16} className="text-blue-400" />
-            <span className="text-gray-400 text-xs">IMC</span>
+            <span className="text-gray-400 text-xs">{t('weight.bmi')}</span>
           </div>
           {bmi ? (
             <>
@@ -263,7 +271,7 @@ export default function WeightPage() {
               <p className={`text-xs mt-1 ${bmiCategory?.color}`}>{bmiCategory?.label}</p>
             </>
           ) : (
-            <p className="text-gray-500 text-xs">Renseigne ta taille</p>
+            <p className="text-gray-500 text-xs">{t('weight.bmiHint')}</p>
           )}
         </div>
       </div>
@@ -271,7 +279,7 @@ export default function WeightPage() {
       {/* Graphique */}
       <div className="bg-gray-900 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-white font-semibold">Évolution</h2>
+          <h2 className="text-white font-semibold">{t('weight.evolution')}</h2>
           <div className="flex gap-2">
             {[30, 90].map(p => (
               <button
@@ -281,7 +289,7 @@ export default function WeightPage() {
                   period === p ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'
                 }`}
               >
-                {p === 30 ? '30j' : '3 mois'}
+                {p === 30 ? t('weight.period30') : t('weight.period90')}
               </button>
             ))}
           </div>
@@ -307,14 +315,14 @@ export default function WeightPage() {
               <Tooltip
                 contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '12px' }}
                 labelStyle={{ color: '#9ca3af' }}
-                formatter={(value) => [`${value} kg`, 'Poids']}
+                formatter={(value) => [`${value} ${weightLabel}`, t('weight.chartLabel')]}
               />
               {profile?.weight_goal_kg && (
                 <ReferenceLine
                   y={profile.weight_goal_kg}
                   stroke="#22c55e"
                   strokeDasharray="4 4"
-                  label={{ value: 'Objectif', fill: '#22c55e', fontSize: 11 }}
+                  label={{ value: t('weight.goal'), fill: '#22c55e', fontSize: 11 }}
                 />
               )}
               <Line
@@ -329,7 +337,7 @@ export default function WeightPage() {
           </ResponsiveContainer>
         ) : (
           <p className="text-gray-500 text-sm text-center py-8">
-            Enregistre au moins 2 pesées pour voir le graphique
+            {t('weight.chartHint')}
           </p>
         )}
       </div>
@@ -337,7 +345,7 @@ export default function WeightPage() {
       {/* Profil — taille et objectif */}
       <div className="bg-gray-900 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-white font-semibold">Mon profil</h2>
+          <h2 className="text-white font-semibold">{t('weight.myProfile')}</h2>
           <button
             onClick={() => setEditingProfile(!editingProfile)}
             className="text-gray-400 hover:text-white transition-colors"
@@ -350,29 +358,29 @@ export default function WeightPage() {
           <div className="flex flex-col gap-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-gray-400 text-xs mb-1 block">Taille (cm)</label>
+                <label className="text-gray-400 text-xs mb-1 block">{t('weight.height')}</label>
                 <input
                   type="number"
                   value={inputHeight}
                   onChange={e => setInputHeight(e.target.value)}
-                  placeholder="ex: 178"
+                  placeholder={t('weight.heightPlaceholder')}
                   className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full"
                 />
               </div>
               <div>
-                <label className="text-gray-400 text-xs mb-1 block">Objectif (kg)</label>
+                <label className="text-gray-400 text-xs mb-1 block">{t('weight.goal')} ({weightLabel})</label>
                 <input
                   type="number"
                   step="0.5"
                   value={inputGoal}
                   onChange={e => setInputGoal(e.target.value)}
-                  placeholder="ex: 75"
+                  placeholder={`ex: ${weightLabel === 'lbs' ? '165' : '75'} ${weightLabel}`}
                   className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full"
                 />
               </div>
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-1 block">Genre</label>
+              <label className="text-gray-400 text-xs mb-1 block">{t('weight.gender')}</label>
               <div className="flex gap-2">
                 {['homme', 'femme'].map(g => (
                   <button
@@ -380,7 +388,7 @@ export default function WeightPage() {
                     onClick={() => setInputGender(g)}
                     className={`flex-1 py-3 rounded-xl text-sm font-medium transition-colors ${inputGender === g ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}
                   >
-                    {g === 'homme' ? 'Homme' : 'Femme'}
+                    {g === 'homme' ? t('common.male') : t('common.female')}
                   </button>
                 ))}
               </div>
@@ -389,22 +397,22 @@ export default function WeightPage() {
               onClick={handleSaveProfile}
               className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl transition-colors"
             >
-              Enregistrer
+              {t('weight.saveBtn')}
             </button>
           </div>
         ) : (
           <div className="flex gap-6">
             <div>
-              <p className="text-gray-400 text-xs">Taille</p>
-              <p className="text-white font-semibold">{profile?.height_cm ? `${profile.height_cm} cm` : '—'}</p>
+              <p className="text-gray-400 text-xs">{t('weight.height')}</p>
+              <p className="text-white font-semibold">{profile?.height_cm ? fmtHeight(profile.height_cm) : '—'}</p>
             </div>
             <div>
-              <p className="text-gray-400 text-xs">Objectif</p>
-              <p className="text-white font-semibold">{profile?.weight_goal_kg ? `${profile.weight_goal_kg} kg` : '—'}</p>
+              <p className="text-gray-400 text-xs">{t('weight.goal')}</p>
+              <p className="text-white font-semibold">{profile?.weight_goal_kg ? fmtWeight(profile.weight_goal_kg) : '—'}</p>
             </div>
             <div>
-              <p className="text-gray-400 text-xs">Genre</p>
-              <p className="text-white font-semibold">{profile?.gender === 'homme' ? 'Homme' : profile?.gender === 'femme' ? 'Femme' : '—'}</p>
+              <p className="text-gray-400 text-xs">{t('weight.gender')}</p>
+              <p className="text-white font-semibold">{profile?.gender === 'homme' ? t('common.male') : profile?.gender === 'femme' ? t('common.female') : '—'}</p>
             </div>
           </div>
         )}

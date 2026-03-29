@@ -6,9 +6,13 @@ import ConfirmModal from '../../components/ui/ConfirmModal'
 import { useToast } from '../../context/ToastContext'
 import { handleSupabaseError } from '../../lib/handleError'
 import { usePushNotifications } from '../../hooks/usePushNotifications'
+import { useLang } from '../../context/LangContext'
+import { useUnits } from '../../context/UnitContext'
 
 export default function ProfilePage() {
   const toast = useToast()
+  const { t, lang, setLang } = useLang()
+  const { weightUnit, setWeightUnit, heightUnit, setHeightUnit, energyUnit, setEnergyUnit } = useUnits()
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [editing, setEditing] = useState(false)
@@ -121,7 +125,7 @@ export default function ProfilePage() {
         const url = `${data.publicUrl}?t=${Date.now()}`
         await supabase.auth.updateUser({ data: { avatar_url: url } })
         setAvatarUrl(url)
-        toast.success('Photo mise à jour !')
+        toast.success(t('profile.photoUpdated'))
       }
     } catch (err) {
       await handleSupabaseError(err, toast, 'Erreur lors du téléchargement de la photo.')
@@ -144,7 +148,7 @@ export default function ProfilePage() {
       }, { onConflict: 'user_id' })
       setSaving(false)
       setEditing(false)
-      toast.success('Profil sauvegardé !')
+      toast.success(t('profile.saved'))
       fetchData()
     } catch (err) {
       setSaving(false)
@@ -162,18 +166,18 @@ export default function ProfilePage() {
       const ok = await subscribe()
       if (!ok) {
         if (Notification.permission === 'denied') {
-          toast.error('Notifications bloquées. Autorise-les dans les paramètres du navigateur (cadenas dans la barre d\'adresse).')
+          toast.error(t('profile.notifBlocked'))
         }
         return
       }
       setNotifEnabled(true)
       await saveNotifSettings(true, notifTime, notifInactivityDays)
-      toast.success('Notifications activées !')
+      toast.success(t('profile.notifOn'))
     } else {
       await unsubscribe()
       setNotifEnabled(false)
       await saveNotifSettings(false, notifTime, notifInactivityDays)
-      toast.info('Notifications désactivées.')
+      toast.info(t('profile.notifOff'))
     }
   }
 
@@ -211,7 +215,7 @@ export default function ProfilePage() {
     : user?.email?.[0].toUpperCase()
 
   const memberSince = user?.created_at
-    ? new Date(user.created_at).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+    ? new Date(user.created_at).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', { month: 'long', year: 'numeric' })
     : null
 
 
@@ -249,11 +253,11 @@ export default function ProfilePage() {
         {/* Nom + email + membre depuis */}
         <div className="text-center">
           <h1 className="text-xl font-bold text-white">
-            {[inputFirstName, inputLastName].filter(Boolean).join(' ') || 'Mon profil'}
+            {[inputFirstName, inputLastName].filter(Boolean).join(' ') || t('profile.title')}
           </h1>
           <p className="text-gray-400 text-sm">{user?.email}</p>
           {memberSince && (
-            <p className="text-gray-600 text-xs mt-1">Membre depuis {memberSince}</p>
+            <p className="text-gray-600 text-xs mt-1">{t('profile.memberSince', { date: memberSince })}</p>
           )}
         </div>
 
@@ -262,19 +266,19 @@ export default function ProfilePage() {
           <div className="flex gap-6 mt-1">
             <div className="text-center">
               <p className="text-white font-bold text-lg">{stats.sessions}</p>
-              <p className="text-gray-500 text-xs">Séances</p>
+              <p className="text-gray-500 text-xs">{t('profile.sessions')}</p>
             </div>
             <div className="w-px bg-gray-800" />
             <div className="text-center">
               <p className="text-white font-bold text-lg flex items-center gap-1 justify-center">
                 {stats.streak} <Flame size={14} className="text-orange-400" />
               </p>
-              <p className="text-gray-500 text-xs">Streak</p>
+              <p className="text-gray-500 text-xs">{t('profile.streak')}</p>
             </div>
             <div className="w-px bg-gray-800" />
             <div className="text-center">
               <p className="text-white font-bold text-lg">{(stats.totalVolume / 1000).toFixed(1)}t</p>
-              <p className="text-gray-500 text-xs">Soulevé</p>
+              <p className="text-gray-500 text-xs">{t('profile.lifted')}</p>
             </div>
           </div>
         )}
@@ -289,7 +293,6 @@ export default function ProfilePage() {
           const isGain = goal > curr
           const goalReached = isGain ? curr >= goal : curr <= goal
           const diff = Math.abs(curr - goal).toFixed(1)
-          // Barre : pour une prise, curr/goal ; pour une perte, on inverse
           const barWidth = goalReached ? 100 : isGain
             ? Math.max(5, Math.round((curr / goal) * 100))
             : Math.max(5, Math.round((1 - (curr - goal) / curr) * 100))
@@ -299,7 +302,7 @@ export default function ProfilePage() {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Target size={15} className="text-indigo-400" />
-                  <p className="text-white font-semibold text-sm">Objectif de poids</p>
+                  <p className="text-white font-semibold text-sm">{t('profile.weightGoalSection')}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-gray-400 text-sm">{curr} kg</span>
@@ -314,10 +317,10 @@ export default function ProfilePage() {
                 />
               </div>
               {goalReached ? (
-                <p className="text-green-400 text-xs mt-2">🎉 Objectif atteint !</p>
+                <p className="text-green-400 text-xs mt-2">{t('profile.weightGoalReached')}</p>
               ) : (
                 <p className="text-gray-500 text-xs mt-2">
-                  {isGain ? `+${diff} kg` : `-${diff} kg`} restants
+                  {t('profile.weightRemaining', { sign: isGain ? '+' : '-', diff })}
                 </p>
               )}
             </div>
@@ -327,7 +330,7 @@ export default function ProfilePage() {
         {/* Informations */}
         <div className="bg-gray-900 rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-white font-semibold">Informations</h2>
+            <h2 className="text-white font-semibold">{t('profile.information')}</h2>
             <button
               onClick={() => editing ? handleSave() : setEditing(true)}
               className="text-gray-400 hover:text-white transition-colors"
@@ -340,13 +343,13 @@ export default function ProfilePage() {
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-gray-400 text-xs mb-1 block">Prénom</label>
+                  <label className="text-gray-400 text-xs mb-1 block">{t('profile.firstName')}</label>
                   <input type="text" value={inputFirstName} onChange={e => setInputFirstName(e.target.value)}
-                    placeholder="ex: Jean" autoFocus
+                    placeholder={t('profile.agePlaceholder')} autoFocus
                     className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full" />
                 </div>
                 <div>
-                  <label className="text-gray-400 text-xs mb-1 block">Nom</label>
+                  <label className="text-gray-400 text-xs mb-1 block">{t('profile.lastName')}</label>
                   <input type="text" value={inputLastName} onChange={e => setInputLastName(e.target.value)}
                     placeholder="ex: Dupont"
                     className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full" />
@@ -354,56 +357,56 @@ export default function ProfilePage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-gray-400 text-xs mb-1 block">Taille (cm)</label>
+                  <label className="text-gray-400 text-xs mb-1 block">{t('profile.height')} (cm)</label>
                   <input type="number" value={inputHeight} onChange={e => setInputHeight(e.target.value)}
-                    placeholder="ex: 178"
+                    placeholder={t('profile.heightPlaceholder')}
                     className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full" />
                 </div>
                 <div>
-                  <label className="text-gray-400 text-xs mb-1 block">Âge</label>
+                  <label className="text-gray-400 text-xs mb-1 block">{t('profile.age')}</label>
                   <input type="number" value={inputAge} onChange={e => setInputAge(e.target.value)}
-                    placeholder="ex: 28"
+                    placeholder={t('profile.agePlaceholder')}
                     className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full" />
                 </div>
               </div>
               <div>
-                <label className="text-gray-400 text-xs mb-1 block">Genre</label>
+                <label className="text-gray-400 text-xs mb-1 block">{t('profile.gender')}</label>
                 <div className="flex gap-2">
                   {['homme', 'femme'].map(g => (
                     <button key={g} onClick={() => setInputGender(g)}
                       className={`flex-1 py-3 rounded-xl text-sm font-medium transition-colors ${inputGender === g ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}>
-                      {g === 'homme' ? 'Homme' : 'Femme'}
+                      {g === 'homme' ? t('common.male') : t('common.female')}
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <label className="text-gray-400 text-xs mb-1 block">Objectif de poids (kg)</label>
+                <label className="text-gray-400 text-xs mb-1 block">{t('profile.weightGoalLabel')} (kg)</label>
                 <input type="number" step="0.5" value={inputGoal} onChange={e => setInputGoal(e.target.value)}
-                  placeholder="ex: 75"
+                  placeholder={t('profile.goalPlaceholder')}
                   className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 w-full" />
               </div>
               <div className="flex gap-2 mt-1">
                 <button onClick={() => setEditing(false)}
                   className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-400 font-semibold py-3 rounded-xl transition-colors">
-                  Annuler
+                  {t('common.cancel')}
                 </button>
                 <button onClick={handleSave} disabled={saving}
                   className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors">
-                  {saving ? 'Enregistrement...' : 'Sauvegarder'}
+                  {saving ? t('common.saving') : t('common.save')}
                 </button>
               </div>
             </div>
           ) : (
             <div className="flex flex-col divide-y divide-gray-800">
               {[
-                { icon: <User size={15} className="text-indigo-400" />, label: 'Prénom', value: inputFirstName || 'Non renseigné' },
-                { icon: <User size={15} className="text-indigo-400" />, label: 'Nom', value: inputLastName || 'Non renseigné' },
-                { icon: <Mail size={15} className="text-indigo-400" />, label: 'Email', value: user?.email },
-                { icon: <Ruler size={15} className="text-indigo-400" />, label: 'Taille', value: profile?.height_cm ? `${profile.height_cm} cm` : 'Non renseignée' },
-                { icon: <User size={15} className="text-indigo-400" />, label: 'Âge', value: profile?.age ? `${profile.age} ans` : 'Non renseigné' },
-                { icon: <User size={15} className="text-indigo-400" />, label: 'Genre', value: profile?.gender === 'homme' ? 'Homme' : profile?.gender === 'femme' ? 'Femme' : 'Non renseigné' },
-                { icon: <Target size={15} className="text-indigo-400" />, label: 'Objectif', value: profile?.weight_goal_kg ? `${profile.weight_goal_kg} kg` : 'Non défini' },
+                { icon: <User size={15} className="text-indigo-400" />, label: t('profile.firstName'), value: inputFirstName || t('profile.notSet') },
+                { icon: <User size={15} className="text-indigo-400" />, label: t('profile.lastName'), value: inputLastName || t('profile.notSet') },
+                { icon: <Mail size={15} className="text-indigo-400" />, label: t('profile.email'), value: user?.email },
+                { icon: <Ruler size={15} className="text-indigo-400" />, label: t('profile.height'), value: profile?.height_cm ? t('profile.heightValue', { n: profile.height_cm }) : t('profile.notEntered') },
+                { icon: <User size={15} className="text-indigo-400" />, label: t('profile.age'), value: profile?.age ? t('profile.ageValue', { n: profile.age }) : t('profile.notSet') },
+                { icon: <User size={15} className="text-indigo-400" />, label: t('profile.gender'), value: profile?.gender === 'homme' ? t('common.male') : profile?.gender === 'femme' ? t('common.female') : t('profile.notSet') },
+                { icon: <Target size={15} className="text-indigo-400" />, label: t('profile.weightGoalLabel'), value: profile?.weight_goal_kg ? t('profile.weightGoalValue', { n: profile.weight_goal_kg }) : t('profile.notDefined') },
               ].map(({ icon, label, value }) => (
                 <div key={label} className="flex items-center gap-3 py-3">
                   <div className="w-8 h-8 bg-gray-800 rounded-xl flex items-center justify-center shrink-0">
@@ -425,7 +428,7 @@ export default function ProfilePage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {subscribed ? <Bell size={16} className="text-indigo-400" /> : <BellOff size={16} className="text-gray-500" />}
-                <h2 className="text-white font-semibold">Notifications</h2>
+                <h2 className="text-white font-semibold">{t('profile.notifications')}</h2>
               </div>
               <button
                 onClick={handleToggleNotif}
@@ -439,7 +442,7 @@ export default function ProfilePage() {
             {subscribed && (
               <>
                 <div>
-                  <label className="text-gray-400 text-xs mb-1.5 block">Heure du rappel quotidien</label>
+                  <label className="text-gray-400 text-xs mb-1.5 block">{t('profile.notifTime')}</label>
                   <input
                     type="time"
                     value={notifTime}
@@ -452,7 +455,7 @@ export default function ProfilePage() {
                 </div>
                 <div>
                   <label className="text-gray-400 text-xs mb-1.5 block">
-                    Rappel si inactif depuis {notifInactivityDays} jour{notifInactivityDays > 1 ? 's' : ''}
+                    {t('profile.notifInactivity', { n: notifInactivityDays, s: notifInactivityDays > 1 ? 's' : '' })}
                   </label>
                   <div className="flex gap-2">
                     {[1, 2, 3, 5, 7].map(d => (
@@ -474,11 +477,78 @@ export default function ProfilePage() {
 
             {!subscribed && (
               <p className="text-gray-500 text-xs leading-relaxed">
-                Active les notifications pour recevoir des rappels d'entraînement et des alertes si tu n'as pas entraîné depuis plusieurs jours.
+                {t('profile.notifDesc')}
               </p>
             )}
           </div>
         )}
+
+        {/* Langue */}
+        <div className="bg-gray-900 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-white font-semibold">{t('profile.languageSection')}</h2>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setLang('fr')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 transition-colors ${lang === 'fr' ? 'border-indigo-500 bg-indigo-950 text-white' : 'border-gray-700 bg-gray-800 text-gray-400'}`}
+            >
+              <span>🇫🇷</span> Français
+            </button>
+            <button
+              onClick={() => setLang('en')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 transition-colors ${lang === 'en' ? 'border-indigo-500 bg-indigo-950 text-white' : 'border-gray-700 bg-gray-800 text-gray-400'}`}
+            >
+              <span>🇬🇧</span> English
+            </button>
+          </div>
+        </div>
+
+        {/* Unités */}
+        <div className="bg-gray-900 rounded-2xl p-5">
+          <h2 className="text-white font-semibold mb-4">{t('units.section')}</h2>
+
+          <div className="flex flex-col gap-3">
+            {/* Poids */}
+            <div>
+              <p className="text-gray-400 text-xs mb-1">{t('units.weightUnit')}</p>
+              <div className="flex gap-2">
+                {['kg', 'lbs'].map(u => (
+                  <button key={u} onClick={() => setWeightUnit(u)}
+                    className={`flex-1 py-2.5 rounded-xl text-sm transition-colors border-2 ${weightUnit === u ? 'border-indigo-500 bg-indigo-950 text-white' : 'border-gray-700 bg-gray-800 text-gray-400'}`}>
+                    {t(`units.${u}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Taille */}
+            <div>
+              <p className="text-gray-400 text-xs mb-1">{t('units.heightUnit')}</p>
+              <div className="flex gap-2">
+                {['cm', 'ftIn'].map(u => (
+                  <button key={u} onClick={() => setHeightUnit(u)}
+                    className={`flex-1 py-2.5 rounded-xl text-sm transition-colors border-2 ${heightUnit === u ? 'border-indigo-500 bg-indigo-950 text-white' : 'border-gray-700 bg-gray-800 text-gray-400'}`}>
+                    {t(`units.${u}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Énergie */}
+            <div>
+              <p className="text-gray-400 text-xs mb-1">{t('units.energyUnit')}</p>
+              <div className="flex gap-2">
+                {['kcal', 'kj'].map(u => (
+                  <button key={u} onClick={() => setEnergyUnit(u)}
+                    className={`flex-1 py-2.5 rounded-xl text-sm transition-colors border-2 ${energyUnit === u ? 'border-indigo-500 bg-indigo-950 text-white' : 'border-gray-700 bg-gray-800 text-gray-400'}`}>
+                    {t(`units.${u}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
 
         <Medals />
 
@@ -488,16 +558,16 @@ export default function ProfilePage() {
           className="flex items-center justify-center gap-2 w-full bg-gray-900 hover:bg-red-950 text-red-400 font-semibold py-4 rounded-2xl transition-colors"
         >
           <LogOut size={18} />
-          Se déconnecter
+          {t('profile.logout')}
         </button>
 
       </div>
 
       {confirmLogout && (
         <ConfirmModal
-          title="Se déconnecter ?"
-          description="Tu devras te reconnecter pour accéder à ton compte."
-          confirmLabel="Se déconnecter"
+          title={t('profile.logoutTitle')}
+          description={t('profile.logoutDesc')}
+          confirmLabel={t('profile.logoutConfirm')}
           variant="logout"
           onConfirm={() => { setConfirmLogout(false); handleLogout() }}
           onCancel={() => setConfirmLogout(false)}

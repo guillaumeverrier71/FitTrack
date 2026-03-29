@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { X, Plus, Trash2, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useLang } from '../../context/LangContext'
 
 export default function CreateTemplateModal({ onClose, onCreated }) {
+  const { t } = useLang()
   const [name, setName] = useState('')
   const [exercises, setExercises] = useState([])
   const [allExercises, setAllExercises] = useState([])
@@ -79,10 +81,10 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-end">
       <div className="bg-gray-900 w-full rounded-t-3xl max-h-[90vh] flex flex-col">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-800">
-          <h2 className="text-white font-semibold text-lg">Nouvelle séance</h2>
+          <h2 className="text-white font-semibold text-lg">{t('createTemplate.title')}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             <X size={22} />
           </button>
@@ -92,7 +94,7 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
 
           {/* Nom */}
           <input
-            placeholder="Nom de la séance (ex: Push A)"
+            placeholder={t('createTemplate.namePlaceholder')}
             value={name}
             onChange={e => setName(e.target.value)}
             className="bg-gray-800 text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-500"
@@ -101,13 +103,13 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
           {/* Exercices ajoutés */}
           {exercises.length > 0 && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-gray-400 text-sm font-medium">Exercices sélectionnés</h3>
+              <h3 className="text-gray-400 text-sm font-medium">{t('progress.exercise')}s</h3>
               {exercises.map(ex => (
                 <div key={ex.exercise_id} className="bg-gray-800 rounded-xl p-3 flex items-center gap-3">
                   <span className="text-white text-sm flex-1">{ex.name}</span>
                   <div className="flex items-center gap-2">
                     <div className="flex flex-col items-center">
-                      <span className="text-gray-500 text-xs">Séries</span>
+                      <span className="text-gray-500 text-xs">{t('createTemplate.sets')}</span>
                       <input
                         type="number"
                         value={ex.sets_target}
@@ -116,7 +118,7 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
                       />
                     </div>
                     <div className="flex flex-col items-center">
-                      <span className="text-gray-500 text-xs">Reps</span>
+                      <span className="text-gray-500 text-xs">{t('createTemplate.reps')}</span>
                       <input
                         type="number"
                         value={ex.reps_target}
@@ -138,14 +140,14 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
 
           {/* Bibliothèque */}
           <div className="flex flex-col gap-3">
-            <h3 className="text-gray-400 text-sm font-medium">Ajouter des exercices</h3>
+            <h3 className="text-gray-400 text-sm font-medium">{t('createTemplate.addBtn')} {t('progress.exercise').toLowerCase()}s</h3>
 
             {/* Recherche */}
             <div className="relative">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
               <input
                 type="text"
-                placeholder="Rechercher un exercice..."
+                placeholder={t('createTemplate.searchPlaceholder')}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="bg-gray-800 text-white rounded-xl pl-9 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500 w-full text-sm placeholder-gray-500"
@@ -194,7 +196,7 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
                     )}
                     <span className="text-sm flex-1 text-left">{exo.name}</span>
                     {added ? (
-                      <span className="text-xs text-indigo-400">Ajouté ✓</span>
+                      <span className="text-xs text-indigo-400">{t('createTemplate.addedBtn')} ✓</span>
                     ) : (
                       <Plus size={16} className="text-gray-400" />
                     )}
@@ -212,7 +214,7 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
             disabled={!name.trim() || loading}
             className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
           >
-            {loading ? 'Enregistrement...' : 'Créer la séance'}
+            {loading ? t('createTemplate.creating') : t('createTemplate.createBtn')}
           </button>
         </div>
       </div>

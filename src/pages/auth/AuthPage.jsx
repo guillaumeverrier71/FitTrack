@@ -1,23 +1,19 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useLang } from '../../context/LangContext'
 
-const SUPABASE_ERRORS = {
-  'Invalid login credentials': 'Email ou mot de passe incorrect.',
-  'Email not confirmed': 'Confirme ton email avant de te connecter.',
-  'User already registered': 'Un compte existe déjà avec cet email.',
-  'Password should be at least 6 characters': 'Le mot de passe doit faire au moins 6 caractères.',
-  'Unable to validate email address: invalid format': 'Adresse email invalide.',
-  'signup is disabled': "Les inscriptions sont désactivées pour le moment.",
-}
-
-function translateError(msg) {
-  for (const [key, val] of Object.entries(SUPABASE_ERRORS)) {
-    if (msg?.includes(key)) return val
-  }
-  return msg || 'Une erreur est survenue.'
+function translateError(msg, t) {
+  if (msg?.includes('Invalid login credentials')) return t('auth.errInvalidCredentials')
+  if (msg?.includes('Email not confirmed')) return t('auth.errEmailNotConfirmed')
+  if (msg?.includes('User already registered')) return t('auth.errAlreadyRegistered')
+  if (msg?.includes('Password should be at least 6 characters')) return t('auth.errWeakPassword')
+  if (msg?.includes('Unable to validate email address: invalid format')) return t('auth.errInvalidEmail')
+  if (msg?.includes('signup is disabled')) return t('auth.errSignupDisabled')
+  return msg || t('auth.errDefault')
 }
 
 export default function AuthPage() {
+  const { t, lang, setLang } = useLang()
   const [tab, setTab] = useState('login')
   const [forgotPassword, setForgotPassword] = useState(false)
   const [email, setEmail] = useState('')
@@ -38,19 +34,19 @@ export default function AuthPage() {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       })
-      if (error) setError(translateError(error.message))
-      else setSuccess('Un lien de réinitialisation a été envoyé à ton adresse email.')
+      if (error) setError(translateError(error.message, t))
+      else setSuccess(t('auth.resetLinkSent'))
       setLoading(false)
       return
     }
 
     if (isLogin) {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) setError(translateError(error.message))
+      if (error) setError(translateError(error.message, t))
     } else {
       const { error } = await supabase.auth.signUp({ email, password })
-      if (error) setError(translateError(error.message))
-      else setSuccess('Vérifie ta boîte mail pour confirmer ton compte !')
+      if (error) setError(translateError(error.message, t))
+      else setSuccess(t('auth.confirmEmailSent'))
     }
 
     setLoading(false)
@@ -107,13 +103,13 @@ export default function AuthPage() {
             {forgotPassword ? (
               <>
                 <div>
-                  <h2 className="text-white font-semibold">Mot de passe oublié</h2>
-                  <p className="text-gray-400 text-sm mt-1">Saisis ton email et on t'envoie un lien de réinitialisation.</p>
+                  <h2 className="text-white font-semibold">{t('auth.forgotPasswordTitle')}</h2>
+                  <p className="text-gray-400 text-sm mt-1">{t('auth.forgotPasswordDesc')}</p>
                 </div>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                   <input
                     type="email"
-                    placeholder="Adresse email"
+                    placeholder={t('auth.email')}
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     required
@@ -136,7 +132,7 @@ export default function AuthPage() {
                       disabled={loading || !email}
                       className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold py-3.5 rounded-xl transition-colors"
                     >
-                      {loading ? 'Envoi…' : 'Envoyer le lien'}
+                      {loading ? t('auth.sending') : t('auth.sendLink')}
                     </button>
                   )}
                   <button
@@ -144,7 +140,7 @@ export default function AuthPage() {
                     onClick={closeForgotPassword}
                     className="text-gray-500 text-sm text-center hover:text-white transition-colors"
                   >
-                    ← Retour à la connexion
+                    {t('auth.backToLogin')}
                   </button>
                 </form>
               </>
@@ -157,17 +153,17 @@ export default function AuthPage() {
                     style={{ transform: isLogin ? 'translateX(0)' : 'translateX(100%)' }}
                   />
                   {[
-                    { key: 'login', label: 'Connexion' },
-                    { key: 'signup', label: 'Inscription' },
-                  ].map(t => (
+                    { key: 'login', label: t('auth.login') },
+                    { key: 'signup', label: t('auth.signup') },
+                  ].map(tabItem => (
                     <button
-                      key={t.key}
-                      onClick={() => handleTabSwitch(t.key)}
+                      key={tabItem.key}
+                      onClick={() => handleTabSwitch(tabItem.key)}
                       className={`relative z-10 flex-1 py-2 text-sm font-medium transition-colors duration-300 rounded-xl ${
-                        tab === t.key ? 'text-white' : 'text-gray-500'
+                        tab === tabItem.key ? 'text-white' : 'text-gray-500'
                       }`}
                     >
-                      {t.label}
+                      {tabItem.label}
                     </button>
                   ))}
                 </div>
@@ -176,7 +172,7 @@ export default function AuthPage() {
                 <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                   <input
                     type="email"
-                    placeholder="Adresse email"
+                    placeholder={t('auth.email')}
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     required
@@ -185,7 +181,7 @@ export default function AuthPage() {
                   <div className="flex flex-col gap-1">
                     <input
                       type="password"
-                      placeholder="Mot de passe"
+                      placeholder={t('auth.password')}
                       value={password}
                       onChange={e => setPassword(e.target.value)}
                       required
@@ -197,7 +193,7 @@ export default function AuthPage() {
                         onClick={openForgotPassword}
                         className="text-indigo-400 text-xs text-right hover:text-indigo-300 transition-colors pr-1 pt-1"
                       >
-                        Mot de passe oublié ?
+                        {t('auth.forgotPassword')}
                       </button>
                     )}
                   </div>
@@ -218,7 +214,7 @@ export default function AuthPage() {
                     disabled={loading || !email || !password}
                     className="bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40 text-white font-semibold py-3.5 rounded-xl transition-colors mt-1 shadow-md shadow-indigo-600/20"
                   >
-                    {loading ? 'Chargement...' : isLogin ? 'Se connecter' : 'Créer mon compte'}
+                    {loading ? t('auth.loadingBtn') : isLogin ? t('auth.loginBtn') : t('auth.signupBtn')}
                   </button>
                 </form>
               </>
@@ -227,9 +223,25 @@ export default function AuthPage() {
 
           {!isLogin && !forgotPassword && (
             <p className="text-gray-600 text-xs text-center px-4">
-              En créant un compte, tu acceptes de l'utiliser pour suivre tes entraînements. Tes données restent privées.
+              {t('auth.privacyNote')}
             </p>
           )}
+
+          {/* Sélecteur de langue */}
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={() => setLang('fr')}
+              className={`text-sm px-3 py-1.5 rounded-xl transition-colors ${lang === 'fr' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}
+            >
+              🇫🇷 Français
+            </button>
+            <button
+              onClick={() => setLang('en')}
+              className={`text-sm px-3 py-1.5 rounded-xl transition-colors ${lang === 'en' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400'}`}
+            >
+              🇬🇧 English
+            </button>
+          </div>
 
         </div>
       </div>
