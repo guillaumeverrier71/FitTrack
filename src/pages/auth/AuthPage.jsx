@@ -89,10 +89,10 @@ export default function AuthPage() {
               className="w-24 h-24 rounded-2xl overflow-hidden shadow-lg"
               style={{
                 backgroundImage: 'url(/fitnavigator-logo.png)',
-                backgroundSize: 'contain',
+                backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat',
-                backgroundColor: 'white',
+                
               }}
             />
             <p className="text-gray-400 text-sm">Take control of your body</p>
