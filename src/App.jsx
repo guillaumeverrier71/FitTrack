@@ -16,6 +16,7 @@ const StepsPage = lazy(() => import('./pages/app/StepsPage'))
 const WeightPage = lazy(() => import('./pages/app/WeightPage'))
 const ProfilePage = lazy(() => import('./pages/app/ProfilePage'))
 const NutritionPage = lazy(() => import('./pages/app/NutritionPage'))
+const PrivacyPage = lazy(() => import('./pages/app/PrivacyPage'))
 
 function PageLoader() {
   return (
@@ -62,6 +63,7 @@ export default function App() {
             <Route path="weight" element={<WeightPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="nutrition" element={<NutritionPage />} />
+            <Route path="privacy" element={<PrivacyPage />} />
           </Route>
         </Routes>
         </Suspense>

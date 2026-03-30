@@ -7,11 +7,13 @@ import { useToast } from '../../context/ToastContext'
 import { handleSupabaseError } from '../../lib/handleError'
 import { usePushNotifications } from '../../hooks/usePushNotifications'
 import { useLang } from '../../context/LangContext'
+import { useNavigate } from 'react-router-dom'
 import { useUnits } from '../../context/UnitContext'
 
 export default function ProfilePage() {
   const toast = useToast()
   const { t, lang, setLang } = useLang()
+  const navigate = useNavigate()
   const { weightUnit, setWeightUnit, heightUnit, setHeightUnit, energyUnit, setEnergyUnit } = useUnits()
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -559,6 +561,13 @@ export default function ProfilePage() {
         >
           <LogOut size={18} />
           {t('profile.logout')}
+        </button>
+
+        <button
+          onClick={() => navigate('/privacy')}
+          className="text-gray-600 text-xs text-center w-full py-2 hover:text-gray-400 transition-colors"
+        >
+          {lang === 'en' ? 'Privacy Policy' : 'Politique de confidentialité'}
         </button>
 
       </div>
