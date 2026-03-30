@@ -108,8 +108,9 @@ export default function OnboardingModal({ userId, onDone }) {
               className="w-20 h-20 rounded-2xl overflow-hidden shadow-lg"
               style={{
                 backgroundImage: 'url(/fitnavigator-logo.png)',
-                backgroundSize: '300% auto',
-                backgroundPosition: '100% center',
+                backgroundSize: 'contain',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat',
                 backgroundColor: 'white',
               }}
             />
