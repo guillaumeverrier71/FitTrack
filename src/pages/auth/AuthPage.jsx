@@ -88,7 +88,7 @@ export default function AuthPage() {
             <div
               className="w-24 h-24 rounded-2xl overflow-hidden shadow-lg"
               style={{
-                backgroundImage: 'url(/bodypilot-logo.png)',
+                backgroundImage: 'url(/fitnavigator-logo.png)',
                 backgroundSize: '300% auto',
                 backgroundPosition: '100% center',
                 backgroundColor: 'white',

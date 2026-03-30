@@ -107,7 +107,7 @@ export default function OnboardingModal({ userId, onDone }) {
             <div
               className="w-20 h-20 rounded-2xl overflow-hidden shadow-lg"
               style={{
-                backgroundImage: 'url(/bodypilot-logo.png)',
+                backgroundImage: 'url(/fitnavigator-logo.png)',
                 backgroundSize: '300% auto',
                 backgroundPosition: '100% center',
                 backgroundColor: 'white',

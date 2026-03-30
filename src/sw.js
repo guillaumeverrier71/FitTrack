@@ -44,7 +44,7 @@ self.addEventListener('push', (event) => {
       body: data.body,
       icon: '/icon-192.png',
       badge: '/icon-192.png',
-      tag: data.tag || 'bodypilot',
+      tag: data.tag || 'fitnavigator',
       renotify: true,
       data: { url: data.url || '/' },
     })

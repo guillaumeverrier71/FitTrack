@@ -54,7 +54,7 @@ export const translations = {
     onboarding: {
       languageTitle: 'Choisis ta langue',
       languageSubtitle: 'Tu pourras la changer plus tard dans ton profil.',
-      welcomeTitle: 'Bienvenue sur BodyPilot',
+      welcomeTitle: 'Bienvenue sur FitNavigator',
       welcomeSubtitle: 'Prends 30 secondes pour configurer ton profil et obtenir une expérience personnalisée.',
       start: 'Commencer',
       skipNow: "Passer pour l'instant",
@@ -513,7 +513,7 @@ export const translations = {
     onboarding: {
       languageTitle: 'Choose your language',
       languageSubtitle: 'You can change it later in your profile.',
-      welcomeTitle: 'Welcome to BodyPilot',
+      welcomeTitle: 'Welcome to FitNavigator',
       welcomeSubtitle: 'Take 30 seconds to set up your profile and get a personalized experience.',
       start: 'Get started',
       skipNow: 'Skip for now',

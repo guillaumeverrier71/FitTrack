@@ -3,7 +3,7 @@ import webpush from 'npm:web-push'
 
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY')!
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')!
-const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') || 'mailto:contact@bodypilot.app'
+const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') || 'mailto:contact@fitnavigator.app'
 
 webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
 

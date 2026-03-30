@@ -28,7 +28,7 @@ export default function PrivacyPage() {
 
             <section>
               <h2 className="text-white font-semibold mb-2">1. Données collectées</h2>
-              <p>BodyPilot collecte uniquement les données que tu saisis volontairement : adresse e-mail, prénom, poids, taille, objectifs, séances d'entraînement, repas et pas quotidiens. Aucune donnée n'est collectée sans ton consentement explicite.</p>
+              <p>FitNavigator collecte uniquement les données que tu saisis volontairement : adresse e-mail, prénom, poids, taille, objectifs, séances d'entraînement, repas et pas quotidiens. Aucune donnée n'est collectée sans ton consentement explicite.</p>
             </section>
 
             <section>
@@ -67,7 +67,7 @@ export default function PrivacyPage() {
 
             <section>
               <h2 className="text-white font-semibold mb-2">1. Data Collected</h2>
-              <p>BodyPilot only collects data you voluntarily enter: email address, first name, weight, height, goals, workout sessions, meals, and daily steps. No data is collected without your explicit consent.</p>
+              <p>FitNavigator only collects data you voluntarily enter: email address, first name, weight, height, goals, workout sessions, meals, and daily steps. No data is collected without your explicit consent.</p>
             </section>
 
             <section>
