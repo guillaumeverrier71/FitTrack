@@ -128,28 +128,55 @@ export const EXERCISE_EN = {
   'Clean': 'Clean',
 }
 
-export const TEMPLATE_EN = {
-  'Dos / Biceps': 'Back / Biceps',
-  'Dos/Biceps': 'Back / Biceps',
-  'Dos / biceps': 'Back / Biceps',
-  'Jambes': 'Legs',
-  'Jambes / Fessiers': 'Legs / Glutes',
-  'Épaules': 'Shoulders',
-  'Épaules / Trapèzes': 'Shoulders / Traps',
-  'Pectoraux / Triceps': 'Chest / Triceps',
-  'Pectoraux / triceps': 'Chest / Triceps',
-  'Pectoraux': 'Chest',
-  'Full Body': 'Full Body',
-  'Corps entier': 'Full Body',
-  'Abdominaux': 'Core / Abs',
-  'Cardio': 'Cardio',
-  'Biceps / Triceps': 'Biceps / Triceps',
-  'Bras': 'Arms',
-  'Push': 'Push',
-  'Pull': 'Pull',
-  'Push / Pull': 'Push / Pull',
-  'Haut du corps': 'Upper Body',
-  'Bas du corps': 'Lower Body',
+// Keys are lowercased + spaces removed for fuzzy matching
+const TEMPLATE_EN_RAW = {
+  'dos/biceps': 'Back / Biceps',
+  'dos/bicep': 'Back / Biceps',
+  'jambes': 'Legs',
+  'jambes/fessiers': 'Legs / Glutes',
+  'fessiers': 'Glutes',
+  'épaules': 'Shoulders',
+  'epaules': 'Shoulders',
+  'épaules/trapèzes': 'Shoulders / Traps',
+  'epaules/trapezes': 'Shoulders / Traps',
+  'épaules/triceps': 'Shoulders / Triceps',
+  'epaules/triceps': 'Shoulders / Triceps',
+  'épaules/triceps/pecs': 'Shoulders / Triceps / Chest',
+  'epaules/triceps/pecs': 'Shoulders / Triceps / Chest',
+  'épaules/triceps/pectoraux': 'Shoulders / Triceps / Chest',
+  'epaules/triceps/pectoraux': 'Shoulders / Triceps / Chest',
+  'pectoraux/triceps': 'Chest / Triceps',
+  'pecs/triceps': 'Chest / Triceps',
+  'pectoraux': 'Chest',
+  'pecs': 'Chest',
+  'fullbody': 'Full Body',
+  'corpsentier': 'Full Body',
+  'abdominaux': 'Core / Abs',
+  'abdos': 'Core / Abs',
+  'cardio': 'Cardio',
+  'biceps/triceps': 'Biceps / Triceps',
+  'bras': 'Arms',
+  'push': 'Push',
+  'pull': 'Pull',
+  'push/pull': 'Push / Pull',
+  'hauducorps': 'Upper Body',
+  'haut du corps': 'Upper Body',
+  'basducorps': 'Lower Body',
+  'bas du corps': 'Lower Body',
+  'mollets': 'Calves',
+  'trapèzes': 'Traps',
+  'trapezes': 'Traps',
+  'lombaires': 'Lower Back',
+  'quadriceps': 'Quads',
+  'ischio-jambiers': 'Hamstrings',
+}
+
+function normalize(str) {
+  return str
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents
+    .replace(/\s*[/]\s*/g, '/') // normalize slashes
+    .replace(/\s+/g, '') // remove spaces
 }
 
 /**
@@ -158,7 +185,7 @@ export const TEMPLATE_EN = {
 export function tTemplate(name, lang) {
   if (!name) return name
   if (lang !== 'en') return name
-  return TEMPLATE_EN[name] || name
+  return TEMPLATE_EN_RAW[normalize(name)] || name
 }
 
 /**

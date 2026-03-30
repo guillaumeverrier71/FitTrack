@@ -15,7 +15,7 @@ function formatDuration(start, end) {
   return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`
 }
 
-function SessionCard({ session, t, locale }) {
+function SessionCard({ session, t, locale, lang }) {
   const [open, setOpen] = useState(false)
   const [sets, setSets] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -216,7 +216,7 @@ export default function HistoryTab() {
             {formatDate(date)}
           </p>
           <div className="flex flex-col gap-2">
-            {daySessions.map(s => <SessionCard key={s.id} session={s} t={t} locale={locale} />)}
+            {daySessions.map(s => <SessionCard key={s.id} session={s} t={t} locale={locale} lang={lang} />)}
           </div>
         </div>
       ))}
