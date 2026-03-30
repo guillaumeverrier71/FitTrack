@@ -5,6 +5,7 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { useToast } from '../../context/ToastContext'
 import { handleSupabaseError } from '../../lib/handleError'
 import { useLang } from '../../context/LangContext'
+import { tTemplate } from '../../i18n/exerciseNames'
 import { Footprints, Dumbbell, Flame, Scale, Zap, CalendarDays } from 'lucide-react'
 
 
@@ -198,10 +199,12 @@ export default function DashboardPage() {
       }
       setWeekSummary(weekSummaryData)
 
+      const stepsCalories = Math.round((stepsData?.steps || 0) * 0.04)
+      const totalBurnedWithSteps = totalBurned + stepsCalories
       const caloriesDataValue = {
         ingested: totalIngested,
-        burned: totalBurned,
-        net: totalIngested - totalBurned,
+        burned: totalBurnedWithSteps,
+        net: totalIngested - totalBurnedWithSteps,
         goal: calorieProfile?.calorie_goal || null,
       }
       setCaloriesData(caloriesDataValue)
@@ -331,7 +334,7 @@ export default function DashboardPage() {
         </div>
         {lastSession ? (
           <div>
-            <p className="text-white font-semibold text-lg">{lastSession.workout_templates?.name}</p>
+            <p className="text-white font-semibold text-lg">{tTemplate(lastSession.workout_templates?.name, lang)}</p>
             <p className="text-gray-400 text-sm mt-1">{timeAgo(lastSession.finished_at)}</p>
           </div>
         ) : (
