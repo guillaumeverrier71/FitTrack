@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react'
 import { X, Plus, Trash2, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../context/LangContext'
+import { tExercise, tMuscle } from '../../i18n/exerciseNames'
 
 export default function CreateTemplateModal({ onClose, onCreated }) {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const [name, setName] = useState('')
   const [exercises, setExercises] = useState([])
   const [allExercises, setAllExercises] = useState([])
@@ -106,7 +107,7 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
               <h3 className="text-gray-400 text-sm font-medium">{t('progress.exercise')}s</h3>
               {exercises.map(ex => (
                 <div key={ex.exercise_id} className="bg-gray-800 rounded-xl p-3 flex items-center gap-3">
-                  <span className="text-white text-sm flex-1">{ex.name}</span>
+                  <span className="text-white text-sm flex-1">{tExercise(ex.name, lang)}</span>
                   <div className="flex items-center gap-2">
                     <div className="flex flex-col items-center">
                       <span className="text-gray-500 text-xs">{t('createTemplate.sets')}</span>
@@ -166,7 +167,7 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
                       : 'bg-gray-800 text-gray-400'
                   }`}
                 >
-                  {g.name}
+                  {tMuscle(g.name, lang)}
                 </button>
               ))}
             </div>
@@ -194,7 +195,7 @@ export default function CreateTemplateModal({ onClose, onCreated }) {
                         onError={e => e.target.style.display = 'none'}
                       />
                     )}
-                    <span className="text-sm flex-1 text-left">{exo.name}</span>
+                    <span className="text-sm flex-1 text-left">{tExercise(exo.name, lang)}</span>
                     {added ? (
                       <span className="text-xs text-indigo-400">{t('createTemplate.addedBtn')} ✓</span>
                     ) : (

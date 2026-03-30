@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { TrendingUp } from 'lucide-react'
 import { useLang } from '../../context/LangContext'
+import { tExercise } from '../../i18n/exerciseNames'
 
 export default function ProgressTab() {
   const { t, lang } = useLang()
@@ -157,7 +158,7 @@ export default function ProgressTab() {
                   : 'bg-gray-900 text-gray-400'
               }`}
             >
-              {ex.name}
+              {tExercise(ex.name, lang)}
             </button>
           ))}
         </div>

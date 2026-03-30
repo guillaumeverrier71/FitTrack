@@ -51,6 +51,7 @@ export default function NutritionPage() {
   const locale = lang === 'fr' ? 'fr-FR' : 'en-US'
   const [meals, setMeals] = useState([])
   const [activities, setActivities] = useState([])
+  const [stepsToday, setStepsToday] = useState(0)
   const [profile, setProfile] = useState(null)
   const [currentWeight, setCurrentWeight] = useState(null)
   const [weekData, setWeekData] = useState([])
@@ -93,15 +94,18 @@ export default function NutritionPage() {
         { data: activitiesData },
         { data: profileData },
         { data: weightData },
+        { data: stepsData },
       ] = await Promise.all([
         supabase.from('meal_entries').select('*').eq('user_id', user.id).eq('date', today).order('created_at'),
         supabase.from('activity_entries').select('*').eq('user_id', user.id).eq('date', today).order('created_at'),
         supabase.from('user_profile').select('*').eq('user_id', user.id).single(),
         supabase.from('weight_entries').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(1),
+        supabase.from('daily_steps').select('steps').eq('user_id', user.id).eq('date', today).maybeSingle(),
       ])
 
       setMeals(mealsData || [])
       setActivities(activitiesData || [])
+      setStepsToday(stepsData?.steps || 0)
       setProfile(profileData)
       setCurrentWeight(weightData?.[0]?.weight_kg || null)
       setProfAge(profileData?.age?.toString() || '')
@@ -356,7 +360,9 @@ export default function NutritionPage() {
   )
 
   const totalIngested = meals.reduce((s, m) => s + m.calories, 0)
-  const totalBurned = activities.reduce((s, a) => s + a.calories_burned, 0)
+  const CALORIES_PER_STEP = 0.04
+  const stepsCalories = Math.round((stepsToday || 0) * CALORIES_PER_STEP)
+  const totalBurned = activities.reduce((s, a) => s + a.calories_burned, 0) + stepsCalories
   const totalProteins = Math.round(meals.reduce((s, m) => s + (m.proteins || 0), 0))
   const totalCarbs = Math.round(meals.reduce((s, m) => s + (m.carbs || 0), 0))
   const totalFats = Math.round(meals.reduce((s, m) => s + (m.fats || 0), 0))
@@ -530,7 +536,7 @@ export default function NutritionPage() {
             <Plus size={18} />
           </button>
         </div>
-        {activities.length === 0 ? (
+        {activities.length === 0 && stepsCalories === 0 ? (
           <p className="text-gray-500 text-sm">{t('nutrition.noActivities')}</p>
         ) : (
           <div className="flex flex-col gap-2">
@@ -548,6 +554,15 @@ export default function NutritionPage() {
                 </div>
               </div>
             ))}
+            {stepsCalories > 0 && (
+              <div className="flex items-center justify-between bg-gray-800 rounded-xl px-3 py-2">
+                <div>
+                  <span className="text-white text-sm">{t('nutrition.stepsActivity')}</span>
+                  <span className="text-gray-500 text-xs ml-2">{stepsToday.toLocaleString()} {t('dashboard.steps')}</span>
+                </div>
+                <span className="text-green-400 text-sm font-medium">-{fmtEnergy(stepsCalories)}</span>
+              </div>
+            )}
           </div>
         )}
       </div>

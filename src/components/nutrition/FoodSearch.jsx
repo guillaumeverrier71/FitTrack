@@ -61,6 +61,7 @@ export default function FoodSearch({ category, onAdd, onClose }) {
   const [localResults, setLocalResults] = useState([])
   const [offResults, setOffResults] = useState([])
   const [offLoading, setOffLoading] = useState(false)
+  const [selecting, setSelecting] = useState(false)
   const [recent, setRecent] = useState([])
   const [selected, setSelected] = useState(null)
   const [quantity, setQuantity] = useState('100')
@@ -129,24 +130,30 @@ export default function FoodSearch({ category, onAdd, onClose }) {
   }
 
   const handleSelectOFF = async (food) => {
-    const { data: existing } = await supabase
-      .from('foods')
-      .select('id, name, calories_per_100g, proteins_per_100g, carbs_per_100g, fats_per_100g, unit')
-      .ilike('name', food.name)
-      .limit(1)
+    setSelecting(true)
+    try {
+      const { data: existing } = await supabase
+        .from('foods')
+        .select('id, name, calories_per_100g, proteins_per_100g, carbs_per_100g, fats_per_100g, unit')
+        .ilike('name', food.name)
+        .limit(1)
 
-    if (existing?.[0]) {
-      handleSelect(existing[0])
-    } else {
-      const { data: inserted } = await supabase.from('foods').insert({
-        name: food.name,
-        calories_per_100g: food.calories_per_100g,
-        proteins_per_100g: food.proteins_per_100g,
-        carbs_per_100g: food.carbs_per_100g,
-        fats_per_100g: food.fats_per_100g,
-        unit: 'g',
-      }).select().single()
-      handleSelect(inserted || food)
+      if (existing?.[0]) {
+        handleSelect(existing[0])
+      } else {
+        const { data: inserted } = await supabase.from('foods').insert({
+          name: food.name,
+          calories_per_100g: food.calories_per_100g,
+          proteins_per_100g: food.proteins_per_100g,
+          carbs_per_100g: food.carbs_per_100g,
+          fats_per_100g: food.fats_per_100g,
+          unit: 'g',
+        }).select().single()
+        // Use inserted (valid DB id) or food without id to avoid FK violation
+        handleSelect(inserted ? inserted : { ...food, id: null })
+      }
+    } finally {
+      setSelecting(false)
     }
   }
 
@@ -325,6 +332,12 @@ export default function FoodSearch({ category, onAdd, onClose }) {
               </button>
             </div>
 
+            {selecting && (
+              <div className="flex items-center justify-center py-4 gap-2 text-gray-400 text-sm">
+                <Loader size={16} className="animate-spin" />
+                {t('common.loading')}
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto px-4 pb-4 flex flex-col gap-2">
               {showRecent && (
                 <>

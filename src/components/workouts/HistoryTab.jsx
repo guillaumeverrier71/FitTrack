@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Dumbbell, Clock, Trash2 } from 'lucide-react
 import { supabase } from '../../lib/supabase'
 import ConfirmModal from '../ui/ConfirmModal'
 import { useLang } from '../../context/LangContext'
+import { tExercise, tMuscle } from '../../i18n/exerciseNames'
 
 function formatDuration(start, end) {
   if (!start || !end) return null
@@ -103,10 +104,10 @@ function SessionCard({ session, t, locale }) {
                   <div className="flex items-center gap-2 mb-2">
                     {ex.muscle && (
                       <span className="text-indigo-400 text-xs bg-indigo-950 px-2 py-0.5 rounded-full shrink-0">
-                        {ex.muscle}
+                        {tMuscle(ex.muscle, lang)}
                       </span>
                     )}
-                    <span className="text-white text-sm font-medium">{ex.name}</span>
+                    <span className="text-white text-sm font-medium">{tExercise(ex.name, lang)}</span>
                   </div>
                   <div className="flex flex-col gap-1">
                     {ex.sets.map((s, j) => (

@@ -3,15 +3,16 @@ import { Trash2, Copy, Play, Dumbbell } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import ConfirmModal from '../ui/ConfirmModal'
 import { useLang } from '../../context/LangContext'
+import { tExercise, tMuscle } from '../../i18n/exerciseNames'
 
 export default function TemplateCard({ template, onStart, onDelete, onDuplicate }) {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const exercises = template.template_exercises || []
 
   // Groupes musculaires uniques
   const muscleGroups = [...new Set(
-    exercises.map(ex => ex.exercises?.muscle_groups?.name).filter(Boolean)
+    exercises.map(ex => tMuscle(ex.exercises?.muscle_groups?.name, lang)).filter(Boolean)
   )]
 
   // Stats rapides
@@ -107,7 +108,7 @@ export default function TemplateCard({ template, onStart, onDelete, onDuplicate 
               <div key={ex.id} className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-2">
                   <Dumbbell size={13} className="text-gray-600 shrink-0" />
-                  <span className="text-gray-300 text-sm">{ex.exercises?.name}</span>
+                  <span className="text-gray-300 text-sm">{tExercise(ex.exercises?.name, lang)}</span>
                 </div>
                 <span className="text-indigo-400 text-xs font-medium bg-indigo-500/10 px-2 py-0.5 rounded-lg">
                   {ex.sets_target} × {ex.reps_target}

@@ -5,6 +5,7 @@ import ConfirmModal from '../ui/ConfirmModal'
 import { useToast } from '../../context/ToastContext'
 import { handleSupabaseError } from '../../lib/handleError'
 import { useLang } from '../../context/LangContext'
+import { tExercise, tMuscle } from '../../i18n/exerciseNames'
 
 function getSuggestion(lastWeight, lastReps) {
   if (!lastWeight || !lastReps) return null
@@ -27,7 +28,7 @@ const DEFAULT_REST = 90
 
 export default function WorkoutSession({ template, onMinimize, onDone }) {
   const toast = useToast()
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const [sessionId, setSessionId] = useState(null)
   const [sets, setSets] = useState({})
   const [lastSession, setLastSession] = useState({})
@@ -262,9 +263,9 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
 
               <div className="flex items-center gap-2">
                 <span className="text-indigo-400 text-xs bg-indigo-950 px-2 py-0.5 rounded-full">
-                  {ex.exercises?.muscle_groups?.name}
+                  {tMuscle(ex.exercises?.muscle_groups?.name, lang)}
                 </span>
-                <h2 className="text-white font-semibold">{ex.exercises?.name}</h2>
+                <h2 className="text-white font-semibold">{tExercise(ex.exercises?.name, lang)}</h2>
               </div>
 
               {ex.exercises?.gif_url && (
