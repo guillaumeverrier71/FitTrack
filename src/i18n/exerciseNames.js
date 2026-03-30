@@ -128,6 +128,39 @@ export const EXERCISE_EN = {
   'Clean': 'Clean',
 }
 
+export const TEMPLATE_EN = {
+  'Dos / Biceps': 'Back / Biceps',
+  'Dos/Biceps': 'Back / Biceps',
+  'Dos / biceps': 'Back / Biceps',
+  'Jambes': 'Legs',
+  'Jambes / Fessiers': 'Legs / Glutes',
+  'Épaules': 'Shoulders',
+  'Épaules / Trapèzes': 'Shoulders / Traps',
+  'Pectoraux / Triceps': 'Chest / Triceps',
+  'Pectoraux / triceps': 'Chest / Triceps',
+  'Pectoraux': 'Chest',
+  'Full Body': 'Full Body',
+  'Corps entier': 'Full Body',
+  'Abdominaux': 'Core / Abs',
+  'Cardio': 'Cardio',
+  'Biceps / Triceps': 'Biceps / Triceps',
+  'Bras': 'Arms',
+  'Push': 'Push',
+  'Pull': 'Pull',
+  'Push / Pull': 'Push / Pull',
+  'Haut du corps': 'Upper Body',
+  'Bas du corps': 'Lower Body',
+}
+
+/**
+ * Returns the translated template name if lang === 'en', else the original.
+ */
+export function tTemplate(name, lang) {
+  if (!name) return name
+  if (lang !== 'en') return name
+  return TEMPLATE_EN[name] || name
+}
+
 /**
  * Returns the translated exercise name if lang === 'en', else the original.
  */

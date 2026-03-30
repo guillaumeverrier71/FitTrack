@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Dumbbell, Clock, Trash2 } from 'lucide-react
 import { supabase } from '../../lib/supabase'
 import ConfirmModal from '../ui/ConfirmModal'
 import { useLang } from '../../context/LangContext'
-import { tExercise, tMuscle } from '../../i18n/exerciseNames'
+import { tExercise, tMuscle, tTemplate } from '../../i18n/exerciseNames'
 
 function formatDuration(start, end) {
   if (!start || !end) return null
@@ -70,7 +70,7 @@ function SessionCard({ session, t, locale }) {
       <button onClick={handleToggle} className="w-full flex items-center justify-between p-4 text-left">
         <div className="flex-1 min-w-0">
           <p className="text-white font-semibold truncate">
-            {session.workout_templates?.name || t('history.freeSession')}
+            {tTemplate(session.workout_templates?.name, lang) || t('history.freeSession')}
           </p>
           <div className="flex items-center gap-3 mt-1">
             {duration && (

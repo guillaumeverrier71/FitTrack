@@ -3,7 +3,7 @@ import { Trash2, Copy, Play, Dumbbell } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import ConfirmModal from '../ui/ConfirmModal'
 import { useLang } from '../../context/LangContext'
-import { tExercise, tMuscle } from '../../i18n/exerciseNames'
+import { tExercise, tMuscle, tTemplate } from '../../i18n/exerciseNames'
 
 export default function TemplateCard({ template, onStart, onDelete, onDuplicate }) {
   const { t, lang } = useLang()
@@ -56,7 +56,7 @@ export default function TemplateCard({ template, onStart, onDelete, onDuplicate 
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-white font-bold text-lg leading-tight">{template.name}</h2>
+              <h2 className="text-white font-bold text-lg leading-tight">{tTemplate(template.name, lang)}</h2>
               {template.is_default && (
                 <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/30 shrink-0">
                   {t('workouts.modelBadge')}
