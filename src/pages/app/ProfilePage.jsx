@@ -211,10 +211,7 @@ export default function ProfilePage() {
   const handleDeleteAccount = async () => {
     setDeletingAccount(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await supabase.functions.invoke('delete-account', {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
+      const res = await supabase.functions.invoke('delete-account')
       if (res.error) throw res.error
       localStorage.clear()
       await supabase.auth.signOut()
