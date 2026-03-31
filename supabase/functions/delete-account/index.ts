@@ -8,27 +8,32 @@ const corsHeaders = {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { status: 200, headers: corsHeaders })
   }
 
   try {
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) return new Response('Unauthorized', { status: 401, headers: corsHeaders })
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'No authorization header' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
-    // Verify the user via their token
-    const userClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    )
-    const { data: { user }, error: userError } = await userClient.auth.getUser()
-    if (userError || !user) return new Response('Unauthorized', { status: 401, headers: corsHeaders })
-
-    // Use service role to delete the user
     const adminClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
+
+    // Get user from the JWT token
+    const { data: { user }, error: userError } = await adminClient.auth.getUser(
+      authHeader.replace('Bearer ', '')
+    )
+
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: 'Invalid token' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     const { error } = await adminClient.auth.admin.deleteUser(user.id)
     if (error) throw error
