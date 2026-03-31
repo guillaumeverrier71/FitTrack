@@ -1,5 +1,5 @@
-import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
 import { Dumbbell, Footprints, Flame, Scale, Home, User } from 'lucide-react'
 import { useSession } from '../../context/SessionContext'
 import WorkoutSession from '../workouts/WorkoutSession'
@@ -10,15 +10,39 @@ import { useOfflineSync } from '../../hooks/useOfflineSync'
 import { useToast } from '../../context/ToastContext'
 import { useLang } from '../../context/LangContext'
 
+const NAV_ROUTES = ['/', '/workouts', '/steps', '/nutrition', '/weight', '/profile']
+
 export default function AppLayout() {
   const { activeSession, sessionVisible, minimizeSession, resumeSession, closeSession } = useSession()
   const location = useLocation()
+  const navigate = useNavigate()
   const isOnline = useOnlineStatus()
   const toast = useToast()
   const { syncing, pendingCount } = useOfflineSync()
   const { t } = useLang()
+  const touchStartX = useRef(null)
+  const touchStartY = useRef(null)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [onboardingUserId, setOnboardingUserId] = useState(null)
+
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+  }
+
+  const handleTouchEnd = (e) => {
+    if (touchStartX.current === null) return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    const dy = e.changedTouches[0].clientY - touchStartY.current
+    touchStartX.current = null
+    touchStartY.current = null
+    // Only trigger on horizontal swipes > 60px that are more horizontal than vertical
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return
+    const idx = NAV_ROUTES.findIndex(r => r === location.pathname)
+    if (idx === -1) return
+    if (dx < 0 && idx < NAV_ROUTES.length - 1) navigate(NAV_ROUTES[idx + 1])
+    if (dx > 0 && idx > 0) navigate(NAV_ROUTES[idx - 1])
+  }
 
   const navItems = [
     { to: '/', icon: Home, label: t('nav.home') },
@@ -97,7 +121,11 @@ export default function AppLayout() {
         </div>
       )}
 
-      <main className={`flex-1 overflow-y-auto pb-20 ${!isOnline || syncing ? 'pt-8' : ''}`}>
+      <main
+        className={`flex-1 overflow-y-auto pb-20 ${!isOnline || syncing ? 'pt-8' : ''}`}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         <div key={location.pathname} className="page-enter">
           <Outlet />
         </div>

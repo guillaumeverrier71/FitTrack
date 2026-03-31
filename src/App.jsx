@@ -6,6 +6,7 @@ import { ToastProvider } from './context/ToastContext'
 import { LangProvider } from './context/LangContext'
 import { UnitProvider } from './context/UnitContext'
 import ErrorBoundary from './components/ui/ErrorBoundary'
+import FirstLaunchScreen from './components/onboarding/FirstLaunchScreen'
 
 const AuthPage = lazy(() => import('./pages/auth/AuthPage'))
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'))
@@ -28,6 +29,9 @@ function PageLoader() {
 
 export default function App() {
   const [session, setSession] = useState(undefined)
+  const [firstLaunchDone, setFirstLaunchDone] = useState(
+    () => !!localStorage.getItem('first_launch_done')
+  )
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -52,6 +56,9 @@ export default function App() {
       <LangProvider>
       <UnitProvider>
       <ToastProvider>
+        {!firstLaunchDone && (
+          <FirstLaunchScreen onDone={() => setFirstLaunchDone(true)} />
+        )}
         <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/auth" element={!session ? <AuthPage /> : <Navigate to="/" />} />

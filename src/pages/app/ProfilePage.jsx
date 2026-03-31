@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { User, Mail, Ruler, Target, LogOut, Pencil, Check, Camera, Flame, Bell, BellOff } from 'lucide-react'
+import { User, Mail, Ruler, Target, LogOut, Pencil, Check, Camera, Flame, Bell, BellOff, Trash2 } from 'lucide-react'
 import Medals from '../../components/profile/Medals'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import { useToast } from '../../context/ToastContext'
@@ -159,6 +159,8 @@ export default function ProfilePage() {
   }
 
   const [confirmLogout, setConfirmLogout] = useState(false)
+  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
   // Notifications
   const { supported: pushSupported, subscribed, loading: pushLoading, subscribe, unsubscribe } = usePushNotifications()
@@ -203,6 +205,22 @@ export default function ProfilePage() {
       await supabase.auth.signOut()
     } catch (err) {
       await handleSupabaseError(err, toast, 'Erreur lors de la déconnexion.')
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await supabase.functions.invoke('delete-account', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+      if (res.error) throw res.error
+      localStorage.clear()
+      await supabase.auth.signOut()
+    } catch (err) {
+      setDeletingAccount(false)
+      toast.error(t('profile.deleteAccountError'))
     }
   }
 
@@ -554,14 +572,45 @@ export default function ProfilePage() {
 
         <Medals />
 
-        {/* Déconnexion */}
-        <button
-          onClick={() => setConfirmLogout(true)}
-          className="flex items-center justify-center gap-2 w-full bg-gray-900 hover:bg-red-950 text-red-400 font-semibold py-4 rounded-2xl transition-colors"
-        >
-          <LogOut size={18} />
-          {t('profile.logout')}
-        </button>
+        {/* Contact & réseaux sociaux */}
+        <div className="bg-gray-900 rounded-2xl p-5 flex flex-col gap-3">
+          <h3 className="text-white font-semibold text-sm">{t('profile.contactTitle')}</h3>
+          <a
+            href="mailto:contact@fitnavigator.app"
+            className="flex items-center gap-3 text-gray-400 hover:text-white text-sm transition-colors"
+          >
+            <Mail size={16} className="text-indigo-400" />
+            contact@fitnavigator.app
+          </a>
+          <div className="flex gap-3 pt-1">
+            <a href="https://instagram.com/fitnavigator" target="_blank" rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 py-2.5 rounded-xl text-xs font-medium transition-colors">
+              <span>📸</span> Instagram
+            </a>
+            <a href="https://tiktok.com/@fitnavigator" target="_blank" rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 py-2.5 rounded-xl text-xs font-medium transition-colors">
+              <span>🎵</span> TikTok
+            </a>
+          </div>
+        </div>
+
+        {/* Déconnexion + Supprimer compte */}
+        <div className="flex gap-3">
+          <button
+            onClick={() => setConfirmLogout(true)}
+            className="flex-1 flex items-center justify-center gap-2 bg-gray-900 hover:bg-red-950 text-red-400 font-semibold py-4 rounded-2xl transition-colors"
+          >
+            <LogOut size={18} />
+            {t('profile.logout')}
+          </button>
+          <button
+            onClick={() => setConfirmDeleteAccount(true)}
+            className="flex items-center justify-center gap-2 bg-gray-900 hover:bg-red-950 text-red-600 font-semibold px-4 py-4 rounded-2xl transition-colors"
+            title={t('profile.deleteAccount')}
+          >
+            <Trash2 size={18} />
+          </button>
+        </div>
 
         <button
           onClick={() => navigate('/privacy')}
@@ -580,6 +629,17 @@ export default function ProfilePage() {
           variant="logout"
           onConfirm={() => { setConfirmLogout(false); handleLogout() }}
           onCancel={() => setConfirmLogout(false)}
+        />
+      )}
+
+      {confirmDeleteAccount && (
+        <ConfirmModal
+          title={t('profile.deleteAccountTitle')}
+          description={t('profile.deleteAccountDesc')}
+          confirmLabel={deletingAccount ? t('common.loading') : t('profile.deleteAccountConfirm')}
+          variant="danger"
+          onConfirm={() => { setConfirmDeleteAccount(false); handleDeleteAccount() }}
+          onCancel={() => setConfirmDeleteAccount(false)}
         />
       )}
     </div>

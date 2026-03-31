@@ -17,6 +17,7 @@ export default function OnboardingModal({ userId, onDone }) {
   const [lastName, setLastName] = useState('')
   const [height, setHeight] = useState('')
   const [weight, setWeight] = useState('')
+  const [gender, setGender] = useState('')
   const [goal, setGoal] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -27,7 +28,10 @@ export default function OnboardingModal({ userId, onDone }) {
     { value: 'endurance', label: t('onboarding.goalEndurance'), emoji: '🏃' },
   ]
 
-  const steps = ['lang', 'welcome', 'name', 'body', 'goal', 'done']
+  const firstLaunchDone = !!localStorage.getItem('first_launch_done')
+  const steps = firstLaunchDone
+    ? ['welcome', 'name', 'body', 'goal', 'done']
+    : ['lang', 'welcome', 'name', 'body', 'goal', 'done']
   const current = steps[step]
 
   const next = () => setStep(s => s + 1)
@@ -41,6 +45,7 @@ export default function OnboardingModal({ userId, onDone }) {
     await supabase.from('user_profile').upsert({
       user_id: userId,
       height_cm: parseFloat(height) || null,
+      gender: gender || null,
       calorie_goal: goal ? CALORIE_DEFAULTS[goal] : null,
     }, { onConflict: 'user_id' })
 
@@ -171,6 +176,25 @@ export default function OnboardingModal({ userId, onDone }) {
               <h2 className="text-2xl font-bold text-white mb-2">{t('onboarding.bodyTitle')}</h2>
               <p className="text-gray-400 text-sm">{t('onboarding.bodySubtitle')}</p>
             </div>
+            {/* Sexe */}
+            <div className="flex gap-3 w-full">
+              {[
+                { value: 'homme', label: t('common.male'), emoji: '♂' },
+                { value: 'femme', label: t('common.female'), emoji: '♀' },
+              ].map(({ value, label, emoji }) => (
+                <button
+                  key={value}
+                  onClick={() => setGender(value)}
+                  className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl border-2 font-medium transition-colors ${
+                    gender === value ? 'border-indigo-500 bg-indigo-950 text-white' : 'border-gray-800 bg-gray-900 text-gray-400'
+                  }`}
+                >
+                  <span className="text-xl">{emoji}</span> {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Taille / Poids */}
             <div className="flex gap-3 w-full">
               <div className="flex-1">
                 <label className="text-gray-400 text-xs mb-2 block">{t('onboarding.height')}</label>
@@ -198,7 +222,7 @@ export default function OnboardingModal({ userId, onDone }) {
               onClick={next}
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-4 rounded-2xl transition-colors"
             >
-              {height || weight ? t('common.continue') : t('common.skip')}
+              {height || weight || gender ? t('common.continue') : t('common.skip')}
             </button>
           </>
         )}
