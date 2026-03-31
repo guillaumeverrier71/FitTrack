@@ -12,41 +12,49 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
-
-    console.log('url:', supabaseUrl ? 'ok' : 'MISSING')
-    console.log('service role:', serviceRoleKey ? 'ok' : 'MISSING')
-    console.log('anon key:', anonKey ? 'ok' : 'MISSING')
-
     const authHeader = req.headers.get('Authorization')
-    console.log('auth header:', authHeader ? 'present' : 'MISSING')
-
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'No authorization header' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Identify user via their own token
-    const userClient = createClient(supabaseUrl!, anonKey!, {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+    // Get user from token
+    const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } }
     })
     const { data: { user }, error: userError } = await userClient.auth.getUser()
-    console.log('user:', user?.id ?? 'null', 'error:', userError?.message ?? 'none')
-
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: userError?.message ?? 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Delete with service role
-    const adminClient = createClient(supabaseUrl!, serviceRoleKey!)
-    const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id)
-    console.log('delete error:', deleteError?.message ?? 'none')
+    const uid = user.id
+    const admin = createClient(supabaseUrl, serviceRoleKey)
 
+    // Supprimer toutes les données utilisateur avant de supprimer le compte
+    const tables = [
+      'meal_entries',
+      'activity_entries',
+      'weight_entries',
+      'workout_sessions',
+      'daily_steps',
+      'push_subscriptions',
+      'user_profile',
+    ]
+
+    for (const table of tables) {
+      const { error } = await admin.from(table).delete().eq('user_id', uid)
+      if (error) console.warn(`Error deleting from ${table}:`, error.message)
+    }
+
+    // Supprimer le compte auth
+    const { error: deleteError } = await admin.auth.admin.deleteUser(uid)
     if (deleteError) throw deleteError
 
     return new Response(JSON.stringify({ success: true }), {

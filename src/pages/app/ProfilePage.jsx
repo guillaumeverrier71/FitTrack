@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { User, Mail, Ruler, Target, LogOut, Pencil, Check, Camera, Flame, Bell, BellOff, Trash2 } from 'lucide-react'
+import { User, Mail, Ruler, Target, LogOut, Pencil, Check, Camera, Flame, Bell, BellOff, Trash2, Crown } from 'lucide-react'
 import Medals from '../../components/profile/Medals'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import { useToast } from '../../context/ToastContext'
@@ -9,12 +9,16 @@ import { usePushNotifications } from '../../hooks/usePushNotifications'
 import { useLang } from '../../context/LangContext'
 import { useNavigate } from 'react-router-dom'
 import { useUnits } from '../../context/UnitContext'
+import { usePremium } from '../../context/PremiumContext'
+import PaywallModal from '../../components/ui/PaywallModal'
 
 export default function ProfilePage() {
   const toast = useToast()
   const { t, lang, setLang } = useLang()
   const navigate = useNavigate()
   const { weightUnit, setWeightUnit, heightUnit, setHeightUnit, energyUnit, setEnergyUnit } = useUnits()
+  const { isPremium, plan } = usePremium()
+  const [showPaywall, setShowPaywall] = useState(false)
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [editing, setEditing] = useState(false)
@@ -567,7 +571,44 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <Medals />
+        {/* Bannière Premium / statut */}
+        <button
+          onClick={() => setShowPaywall(true)}
+          className={`flex items-center justify-between rounded-2xl px-4 py-3 transition-colors ${
+            isPremium
+              ? 'bg-yellow-950/40 border border-yellow-500/30'
+              : 'bg-indigo-950/60 border border-indigo-500/30'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Crown size={16} className="text-yellow-400 shrink-0" />
+            <span className={`text-sm font-medium ${isPremium ? 'text-yellow-200' : 'text-indigo-200'}`}>
+              {isPremium
+                ? (lang === 'en' ? `Premium — ${plan}` : `Premium actif — ${plan}`)
+                : (lang === 'en' ? 'Upgrade to Premium' : 'Passer à Premium')}
+            </span>
+          </div>
+          {!isPremium && (
+            <span className="text-indigo-400 text-xs font-semibold">
+              {lang === 'en' ? 'See plans' : 'Voir les plans'}
+            </span>
+          )}
+        </button>
+
+        {isPremium ? <Medals /> : (
+          <div
+            className="relative rounded-2xl overflow-hidden cursor-pointer"
+            onClick={() => setShowPaywall(true)}
+          >
+            <div className="opacity-30 pointer-events-none"><Medals /></div>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gray-950/60 backdrop-blur-sm">
+              <Crown size={24} className="text-yellow-400" />
+              <p className="text-white font-semibold text-sm">
+                {lang === 'en' ? 'Medals — Premium' : 'Médailles — Premium'}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Contact & réseaux sociaux */}
         <div className="bg-gray-900 rounded-2xl p-5 flex flex-col gap-3">
@@ -626,6 +667,13 @@ export default function ProfilePage() {
           variant="logout"
           onConfirm={() => { setConfirmLogout(false); handleLogout() }}
           onCancel={() => setConfirmLogout(false)}
+        />
+      )}
+
+      {showPaywall && (
+        <PaywallModal
+          onClose={() => setShowPaywall(false)}
+          onSelectPlan={() => setShowPaywall(false)}
         />
       )}
 

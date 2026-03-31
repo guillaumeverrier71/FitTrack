@@ -1,11 +1,30 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, Plus, Check, Pause, Play } from 'lucide-react'
+import { X, Plus, Check, Pause, Play, Trophy } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import ConfirmModal from '../ui/ConfirmModal'
 import { useToast } from '../../context/ToastContext'
 import { handleSupabaseError } from '../../lib/handleError'
 import { useLang } from '../../context/LangContext'
+import { useUnits } from '../../context/UnitContext'
+import { usePremium } from '../../context/PremiumContext'
 import { tExercise, tMuscle } from '../../i18n/exerciseNames'
+
+const MEDAL_DEFS = [
+  { id: 'first_session',  emoji: '🏋️', check: ({ sessions }) => sessions >= 1 },
+  { id: 'sessions_5',     emoji: '🙌', check: ({ sessions }) => sessions >= 5 },
+  { id: 'sessions_10',    emoji: '🔟', check: ({ sessions }) => sessions >= 10 },
+  { id: 'sessions_25',    emoji: '💪', check: ({ sessions }) => sessions >= 25 },
+  { id: 'sessions_50',    emoji: '🥉', check: ({ sessions }) => sessions >= 50 },
+  { id: 'sessions_100',   emoji: '🏆', check: ({ sessions }) => sessions >= 100 },
+  { id: 'streak_3',       emoji: '🔥', check: ({ streak }) => streak >= 3 },
+  { id: 'streak_7',       emoji: '⚡', check: ({ streak }) => streak >= 7 },
+  { id: 'streak_14',      emoji: '🌟', check: ({ streak }) => streak >= 14 },
+  { id: 'streak_30',      emoji: '🚀', check: ({ streak }) => streak >= 30 },
+  { id: 'lifted_100',     emoji: '🏅', check: ({ totalVolume }) => totalVolume >= 100 },
+  { id: 'lifted_1000',    emoji: '🥈', check: ({ totalVolume }) => totalVolume >= 1000 },
+  { id: 'lifted_5000',    emoji: '🥇', check: ({ totalVolume }) => totalVolume >= 5000 },
+  { id: 'lifted_10000',   emoji: '👑', check: ({ totalVolume }) => totalVolume >= 10000 },
+]
 
 function getSuggestion(lastWeight, lastReps) {
   if (!lastWeight || !lastReps) return null
@@ -29,7 +48,10 @@ const DEFAULT_REST = 90
 export default function WorkoutSession({ template, onMinimize, onDone }) {
   const toast = useToast()
   const { t, lang } = useLang()
+  const { fmtWeight } = useUnits()
+  const { isPremium } = usePremium()
   const [sessionId, setSessionId] = useState(null)
+  const [recap, setRecap] = useState(null) // { duration, exercises, newMedals }
   const [sets, setSets] = useState({})
   const [lastSession, setLastSession] = useState({})
   const [saving, setSaving] = useState(false)
@@ -204,7 +226,49 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
       return
     }
 
-    toast.success('Séance enregistrée !')
+    // Calculer nouvelles médailles
+    const { data: { user } } = await supabase.auth.getUser()
+    const seenKey = `seen_medals_${user.id}`
+    const seenIds = JSON.parse(localStorage.getItem(seenKey) || '[]')
+
+    const { count: sessionsCount } = await supabase
+      .from('workout_sessions').select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id).not('finished_at', 'is', null)
+    const { data: allSessions } = await supabase
+      .from('workout_sessions').select('finished_at')
+      .eq('user_id', user.id).not('finished_at', 'is', null)
+      .order('finished_at', { ascending: false })
+    const { data: setsData } = await supabase
+      .from('session_sets').select('weight_kg, reps, workout_sessions!inner(user_id)')
+      .eq('workout_sessions.user_id', user.id)
+
+    let streak = 0
+    if (allSessions?.length) {
+      const uniqueDays = [...new Set(allSessions.map(s => s.finished_at.split('T')[0]))]
+      let current = new Date()
+      for (const day of uniqueDays) {
+        const d = new Date(day)
+        const diff = Math.floor((current - d) / 1000 / 60 / 60 / 24)
+        if (diff <= 1) { streak++; current = d } else break
+      }
+    }
+    const totalVolume = setsData ? setsData.reduce((s, set) => s + (set.weight_kg * set.reps), 0) : 0
+    const computedStats = { sessions: sessionsCount || 0, streak, totalVolume }
+    const nowUnlocked = MEDAL_DEFS.filter(m => m.check(computedStats))
+    const newMedals = nowUnlocked.filter(m => !seenIds.includes(m.id))
+    const updatedSeen = [...new Set([...seenIds, ...nowUnlocked.map(m => m.id)])]
+    localStorage.setItem(seenKey, JSON.stringify(updatedSeen))
+
+    // Construire récap par exercice
+    const recapExercises = exercises.map(ex => {
+      const doneSets = (sets[ex.exercise_id] || []).filter(s => s.done)
+      return {
+        name: ex.exercises?.name,
+        sets: doneSets,
+        maxWeight: doneSets.length ? Math.max(...doneSets.map(s => parseFloat(s.weight) || 0)) : 0,
+        totalVolume: doneSets.reduce((s, set) => s + (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0), 0),
+      }
+    }).filter(ex => ex.sets.length > 0)
 
     if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
       const reg = await navigator.serviceWorker.ready
@@ -216,7 +280,7 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
     }
 
     setSaving(false)
-    onDone()
+    setRecap({ duration: elapsed, exercises: recapExercises, newMedals })
   }
 
   const handleAbandon = async () => {
@@ -229,6 +293,83 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
 
   const restCircumference = 2 * Math.PI * 22
   const restProgress = restTimer.active ? restTimer.remaining / restTimer.total : 0
+
+  if (recap) {
+    const totalVol = recap.exercises.reduce((s, ex) => s + ex.totalVolume, 0)
+    const mins = Math.floor(recap.duration / 60)
+    return (
+      <div className="h-full bg-gray-950 flex flex-col overflow-y-auto">
+        <div className="flex flex-col items-center px-6 pt-10 pb-6 gap-6">
+          {/* Header */}
+          <div className="flex flex-col items-center gap-2 text-center">
+            <div className="w-16 h-16 rounded-full bg-green-500/20 border-2 border-green-500/40 flex items-center justify-center">
+              <Trophy size={28} className="text-green-400" />
+            </div>
+            <h1 className="text-white text-2xl font-bold">{t('session.recapTitle')}</h1>
+            <p className="text-gray-400 text-sm">{template.name}</p>
+          </div>
+
+          {/* Stats globales */}
+          <div className="flex gap-3 w-full">
+            <div className="flex-1 bg-gray-900 rounded-2xl p-4 text-center">
+              <p className="text-white font-bold text-xl">{mins}<span className="text-gray-400 text-sm ml-1">min</span></p>
+              <p className="text-gray-500 text-xs mt-1">{t('session.recapDuration')}</p>
+            </div>
+            <div className="flex-1 bg-gray-900 rounded-2xl p-4 text-center">
+              <p className="text-white font-bold text-xl">{recap.exercises.reduce((s, ex) => s + ex.sets.length, 0)}</p>
+              <p className="text-gray-500 text-xs mt-1">{t('session.recapSets')}</p>
+            </div>
+            <div className="flex-1 bg-gray-900 rounded-2xl p-4 text-center">
+              <p className="text-white font-bold text-xl">{fmtWeight(totalVol)}</p>
+              <p className="text-gray-500 text-xs mt-1">{t('session.recapVolume')}</p>
+            </div>
+          </div>
+
+          {/* Exercices */}
+          <div className="w-full flex flex-col gap-2">
+            <h2 className="text-gray-400 text-xs font-medium uppercase tracking-wider">{t('session.recapExercises')}</h2>
+            {recap.exercises.map((ex, i) => (
+              <div key={i} className="bg-gray-900 rounded-2xl px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-white font-medium text-sm">{tExercise(ex.name, lang)}</span>
+                  <span className="text-gray-500 text-xs">{ex.sets.length} {t('session.sets')}</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {ex.sets.map((s, j) => (
+                    <span key={j} className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-lg">
+                      {s.reps} × {fmtWeight(parseFloat(s.weight) || 0)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Nouvelles médailles */}
+          {isPremium && recap.newMedals.length > 0 && (
+            <div className="w-full flex flex-col gap-2">
+              <h2 className="text-gray-400 text-xs font-medium uppercase tracking-wider">{t('session.recapNewMedals')}</h2>
+              <div className="bg-indigo-950/50 border border-indigo-500/30 rounded-2xl p-4 flex flex-wrap gap-3">
+                {recap.newMedals.map(m => (
+                  <div key={m.id} className="flex items-center gap-2">
+                    <span className="text-2xl">{m.emoji}</span>
+                    <span className="text-indigo-300 text-sm font-medium">{t(`medals.${m.id}`)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={onDone}
+            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-4 rounded-2xl transition-colors mt-2"
+          >
+            {t('session.recapDone')}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="h-full bg-gray-950 flex flex-col">
@@ -322,7 +463,7 @@ export default function WorkoutSession({ template, onMinimize, onDone }) {
                         <span className="text-gray-600 text-xs">
                           {`${lastSet.reps} reps × ${lastSet.weight}kg`}
                         </span>
-                        {suggestion && (
+                        {suggestion && isPremium && (
                           <span className="text-indigo-400 text-xs">
                             → {suggestion.reps} reps × {suggestion.weight}kg
                           </span>

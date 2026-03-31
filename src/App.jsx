@@ -5,6 +5,7 @@ import { SessionProvider } from './context/SessionContext'
 import { ToastProvider } from './context/ToastContext'
 import { LangProvider } from './context/LangContext'
 import { UnitProvider } from './context/UnitContext'
+import { PremiumProvider } from './context/PremiumContext'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 import FirstLaunchScreen from './components/onboarding/FirstLaunchScreen'
 
@@ -18,6 +19,7 @@ const WeightPage = lazy(() => import('./pages/app/WeightPage'))
 const ProfilePage = lazy(() => import('./pages/app/ProfilePage'))
 const NutritionPage = lazy(() => import('./pages/app/NutritionPage'))
 const PrivacyPage = lazy(() => import('./pages/app/PrivacyPage'))
+const PremiumSuccessPage = lazy(() => import('./pages/app/PremiumSuccessPage'))
 
 function PageLoader() {
   return (
@@ -55,6 +57,7 @@ export default function App() {
     <ErrorBoundary>
       <LangProvider>
       <UnitProvider>
+      <PremiumProvider>
       <ToastProvider>
         {!firstLaunchDone && (
           <FirstLaunchScreen onDone={() => setFirstLaunchDone(true)} />
@@ -71,10 +74,12 @@ export default function App() {
             <Route path="profile" element={<ProfilePage />} />
             <Route path="nutrition" element={<NutritionPage />} />
             <Route path="privacy" element={<PrivacyPage />} />
+            <Route path="premium-success" element={<PremiumSuccessPage />} />
           </Route>
         </Routes>
         </Suspense>
       </ToastProvider>
+      </PremiumProvider>
       </UnitProvider>
       </LangProvider>
     </ErrorBoundary>
