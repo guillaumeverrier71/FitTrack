@@ -8,6 +8,7 @@ import { UnitProvider } from './context/UnitContext'
 import { PremiumProvider } from './context/PremiumContext'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 import FirstLaunchScreen from './components/onboarding/FirstLaunchScreen'
+import { Analytics } from '@vercel/analytics/react'
 
 const AuthPage = lazy(() => import('./pages/auth/AuthPage'))
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'))
@@ -82,6 +83,7 @@ export default function App() {
       </PremiumProvider>
       </UnitProvider>
       </LangProvider>
+      <Analytics />
     </ErrorBoundary>
   )
 }

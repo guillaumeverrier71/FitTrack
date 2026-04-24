@@ -4,11 +4,13 @@ import { Search, Plus, X, Clock, Globe, Loader, Camera, AlertCircle } from 'luci
 import BarcodeScanner from './BarcodeScanner'
 import { useLang } from '../../context/LangContext'
 
-async function searchOpenFoodFacts(query) {
+const OFF_PROXY = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/off-proxy`
+
+async function searchOpenFoodFacts(query, lang = 'fr') {
   try {
     const res = await fetch(
-      `https://world.openfoodfacts.org/cgi/search.pl?action=process&search_terms=${encodeURIComponent(query)}&search_simple=1&json=1&fields=product_name,nutriments,code&page_size=10&lc=fr&cc=fr`,
-      { signal: AbortSignal.timeout(5000) }
+      `${OFF_PROXY}?q=${encodeURIComponent(query)}&lang=${lang}`,
+      { signal: AbortSignal.timeout(8000) }
     )
     const data = await res.json()
     return (data.products || [])
@@ -32,8 +34,8 @@ async function searchOpenFoodFacts(query) {
 async function fetchByBarcode(barcode) {
   try {
     const res = await fetch(
-      `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`,
-      { signal: AbortSignal.timeout(5000) }
+      `${OFF_PROXY}?barcode=${barcode}`,
+      { signal: AbortSignal.timeout(8000) }
     )
     const data = await res.json()
     if (data.status !== 1 || !data.product) return null

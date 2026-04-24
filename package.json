@@ -14,6 +14,7 @@
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0",
     "@supabase/supabase-js": "^2.100.0",
+    "@vercel/analytics": "^2.0.1",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
     "lucide-react": "^1.0.1",
