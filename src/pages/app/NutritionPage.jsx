@@ -89,18 +89,29 @@ export default function NutritionPage() {
 
       const today = getToday()
 
+      const dates = []
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date()
+        d.setDate(d.getDate() - i)
+        dates.push(d.toISOString().split('T')[0])
+      }
+
       const [
         { data: mealsData },
         { data: activitiesData },
         { data: profileData },
         { data: weightData },
         { data: stepsData },
+        { data: weekMeals },
+        { data: weekActs },
       ] = await Promise.all([
         supabase.from('meal_entries').select('*').eq('user_id', user.id).eq('date', today).order('created_at'),
         supabase.from('activity_entries').select('*').eq('user_id', user.id).eq('date', today).order('created_at'),
         supabase.from('user_profile').select('*').eq('user_id', user.id).single(),
         supabase.from('weight_entries').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(1),
         supabase.from('daily_steps').select('steps').eq('user_id', user.id).eq('date', today).maybeSingle(),
+        supabase.from('meal_entries').select('date, calories').eq('user_id', user.id).in('date', dates),
+        supabase.from('activity_entries').select('date, calories_burned').eq('user_id', user.id).in('date', dates),
       ])
 
       setMeals(mealsData || [])
@@ -115,16 +126,6 @@ export default function NutritionPage() {
       setProfProteinsGoal(profileData?.proteins_goal_g?.toString() || '')
       setProfCarbsGoal(profileData?.carbs_goal_g?.toString() || '')
       setProfFatsGoal(profileData?.fats_goal_g?.toString() || '')
-
-      const dates = []
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date()
-        d.setDate(d.getDate() - i)
-        dates.push(d.toISOString().split('T')[0])
-      }
-
-      const { data: weekMeals } = await supabase.from('meal_entries').select('date, calories').eq('user_id', user.id).in('date', dates)
-      const { data: weekActs } = await supabase.from('activity_entries').select('date, calories_burned').eq('user_id', user.id).in('date', dates)
 
       const mapped = dates.map(date => ({
         date,

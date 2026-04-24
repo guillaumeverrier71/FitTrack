@@ -72,58 +72,38 @@ export default function DashboardPage() {
       if (authError) { await handleSupabaseError(authError, toast); setLoading(false); return }
       setUser(user)
 
+      const today = getToday()
+      const monday = getMondayOfWeek()
 
-      // Calories du jour
-      const { data: mealsToday } = await supabase
-        .from('meal_entries')
-        .select('calories')
-        .eq('user_id', user.id)
-        .eq('date', getToday())
-
-      const { data: activitiesToday } = await supabase
-        .from('activity_entries')
-        .select('calories_burned')
-        .eq('user_id', user.id)
-        .eq('date', getToday())
-
-      const { data: calorieProfile } = await supabase
-        .from('user_profile')
-        .select('calorie_goal')
-        .eq('user_id', user.id)
-        .single()
+      const [
+        { data: mealsToday },
+        { data: activitiesToday },
+        { data: calorieProfile },
+        { data: stepsData },
+        { data: sessions },
+        { data: allSessions },
+        { data: weightEntries },
+        { data: weekSessions },
+        { data: weekMeals },
+        { data: weekSteps },
+      ] = await Promise.all([
+        supabase.from('meal_entries').select('calories').eq('user_id', user.id).eq('date', today),
+        supabase.from('activity_entries').select('calories_burned').eq('user_id', user.id).eq('date', today),
+        supabase.from('user_profile').select('calorie_goal').eq('user_id', user.id).single(),
+        supabase.from('daily_steps').select('*').eq('user_id', user.id).eq('date', today).maybeSingle(),
+        supabase.from('workout_sessions').select('*, workout_templates(name)').eq('user_id', user.id).not('finished_at', 'is', null).order('finished_at', { ascending: false }).limit(1),
+        supabase.from('workout_sessions').select('finished_at').eq('user_id', user.id).not('finished_at', 'is', null).order('finished_at', { ascending: false }),
+        supabase.from('weight_entries').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(2),
+        supabase.from('workout_sessions').select('id').eq('user_id', user.id).not('finished_at', 'is', null).gte('finished_at', monday),
+        supabase.from('meal_entries').select('calories, date').eq('user_id', user.id).gte('date', monday),
+        supabase.from('daily_steps').select('steps').eq('user_id', user.id).gte('date', monday),
+      ])
 
       const totalIngested = (mealsToday || []).reduce((s, m) => s + m.calories, 0)
       const totalBurned = (activitiesToday || []).reduce((s, a) => s + a.calories_burned, 0)
 
-      // (caloriesDataValue est construit plus bas avant le cache.set)
-
-
-      // Pas du jour
-      const { data: stepsData } = await supabase
-        .from('daily_steps')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('date', getToday())
-        .maybeSingle()
       setSteps(stepsData)
-
-      // Dernière séance
-      const { data: sessions } = await supabase
-        .from('workout_sessions')
-        .select('*, workout_templates(name)')
-        .eq('user_id', user.id)
-        .not('finished_at', 'is', null)
-        .order('finished_at', { ascending: false })
-        .limit(1)
       setLastSession(sessions?.[0] || null)
-
-      // Streak — nombre de jours consécutifs avec une séance
-      const { data: allSessions } = await supabase
-        .from('workout_sessions')
-        .select('finished_at')
-        .eq('user_id', user.id)
-        .not('finished_at', 'is', null)
-        .order('finished_at', { ascending: false })
 
       let streakCount = 0
       if (allSessions?.length) {
@@ -140,14 +120,6 @@ export default function DashboardPage() {
         setStreak(streakCount)
       }
 
-      // Dernier poids
-      const { data: weightEntries } = await supabase
-        .from('weight_entries')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('date', { ascending: false })
-        .limit(2)
-
       let weightDataValue = null
       if (weightEntries?.length > 0) {
         const latest = weightEntries[0]
@@ -156,27 +128,6 @@ export default function DashboardPage() {
         weightDataValue = { latest, diff }
         setWeightData(weightDataValue)
       }
-
-      // Résumé hebdomadaire
-      const monday = getMondayOfWeek()
-      const { data: weekSessions } = await supabase
-        .from('workout_sessions')
-        .select('id')
-        .eq('user_id', user.id)
-        .not('finished_at', 'is', null)
-        .gte('finished_at', monday)
-
-      const { data: weekMeals } = await supabase
-        .from('meal_entries')
-        .select('calories, date')
-        .eq('user_id', user.id)
-        .gte('date', monday)
-
-      const { data: weekSteps } = await supabase
-        .from('daily_steps')
-        .select('steps')
-        .eq('user_id', user.id)
-        .gte('date', monday)
 
       // Avg calories: sum / number of distinct days with entries
       const mealsByDay = (weekMeals || []).reduce((acc, m) => {
